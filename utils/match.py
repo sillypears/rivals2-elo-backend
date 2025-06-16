@@ -1,8 +1,9 @@
-from pydantic import BaseModel
+from pydantic.dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 
-class Match(BaseModel):
+@dataclass
+class Match:
     match_date: datetime
     elo_rank_old: int
     elo_rank_new: int

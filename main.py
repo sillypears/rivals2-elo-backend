@@ -1,11 +1,16 @@
 import os
-from fastapi import FastAPI, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import aiomysql
 from typing import List
-
+from dotenv import load_dotenv
 from utils.match import Match
+import asyncio
+import json
+
+from pydantic import TypeAdapter
+load_dotenv()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -62,8 +67,9 @@ async def get_matches(offset:int = 0, limit: int = 10):
             return rows
 
 websockets: List[WebSocket] = []
+
 @app.post("/insert-match")
-async def insert-match(match: Match):
+async def insert_match(match: Match):
     query = '''
         INSERT INTO matches (
             match_date, elo_rank_old, elo_rank_new, elo_change,
@@ -81,16 +87,29 @@ async def insert-match(match: Match):
     '''
     async with app.state.db_pool.acquire() as conn:
         async with conn.cursor() as cur:
-            await cur.execute(query, (
-                match.match_date,
-                match.elo_rank_old, match.elo_rank_new, match.elo_change,
-                match.ranked_game_number, match.total_wins, match.win_streak_value, match.opponent_elo,
-                match.game_1_char_pick, match.game_1_opponent_pick, match.game_1_stage, match.game_1_winner,
-                match.game_2_char_pick, match.game_2_opponent_pick, match.game_2_stage, match.game_2_winner,
-                match.game_3_char_pick, match.game_3_opponent_pick, match.game_3_stage, match.game_3_winner
-            ))
-    await notify_websockets({"type": "new_match", "game": match.ranked_game_number})
+            try:
+                await cur.execute(query, (
+                    match.match_date,
+                    match.elo_rank_old, match.elo_rank_new, match.elo_change,
+                    match.ranked_game_number, match.total_wins, match.win_streak_value, match.opponent_elo,
+                    match.game_1_char_pick, match.game_1_opponent_pick, match.game_1_stage, match.game_1_winner,
+                    match.game_2_char_pick, match.game_2_opponent_pick, match.game_2_stage, match.game_2_winner,
+                    match.game_3_char_pick, match.game_3_opponent_pick, match.game_3_stage, match.game_3_winner
+                ))
+                await notify_websockets({'type': 'new_match', 'ranked_game_number': match.ranked_game_number})
+                print("sending ws")
+
+            except aiomysql.IntegrityError as e:
+                return {"status": "failed", "error": e.args}
     return {"status": "ok"}
+
+@app.get("/seasons")
+async def get_seasons():
+    async with app.state.db_pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            await cur.execute(f"SELECT start_date, end_date, short_name, display_name FROM seasons")
+            rows = await cur.fetchall()
+            return rows
 
 
 @app.websocket("/ws")
@@ -99,12 +118,20 @@ async def websocket_endpoint(websocket: WebSocket):
     websockets.append(websocket)
     try:
         while True:
-            await websocket.receive_text()  # keep alive
+            try:
+                await asyncio.wait_for(websocket.receive_text(), timeout=30)
+            except asyncio.TimeoutError:
+                await websocket.send_text("ping")  # optional keep-alive
     except WebSocketDisconnect:
         websockets.remove(websocket)
+    except Exception:
+        websockets.remove(websocket)  # catch-all for disconnects
 
 async def notify_websockets(message: dict):
-    for ws in websockets[:]:  # copy the list to avoid errors if it mutates
+    for ws in websockets[:]: 
         try:
             await ws.send_json(message)
-        except:
+            print(f"Sent: {message}")
+        except Exception:
+            print("WebSocket failed; removing")
+            websockets.remove(ws)
