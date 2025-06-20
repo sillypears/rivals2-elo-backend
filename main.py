@@ -32,7 +32,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://192.168.1.30:8006"],  # frontend dev server
+    allow_origins=["http://192.168.1.30:8006", "http://192.168.1.30:8007"],  
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -80,7 +80,7 @@ async def get_stats(limit: int = 10, skip: int = 0, match_win: bool = True):
         async with conn.cursor(aiomysql.DictCursor) as cur:
             await cur.execute(f"SELECT * FROM matches WHERE match_win = {1 if match_win else 0} ORDER BY ranked_game_number DESC LIMIT {limit} OFFSET {skip}")
             rows = await cur.fetchall()
-            return rows
+            return sorted(rows, key=lambda x: x['ranked_game_number'])
         
 
 
@@ -113,7 +113,12 @@ async def insert_match(match: Match, debug: bool = 0):
                     match.game_2_char_pick, match.game_2_opponent_pick, match.game_2_stage, match.game_2_winner,
                     match.game_3_char_pick, match.game_3_opponent_pick, match.game_3_stage, match.game_3_winner
                 ))
-                await notify_websockets({'type': 'new_match', 'ranked_game_number': match.ranked_game_number})
+                await notify_websockets({'type': 'new_match', 'ranked_game_number': int(match.ranked_game_number)})
+                if match.match_win == 1:
+                    await notify_websockets({'type': 'new_win_match', 'ranked_game_number': int(match.ranked_game_number)})
+                elif match.win == 0:
+                    await notify_websockets({'type': 'new_lose_match', 'ranked_game_number': int(match.ranked_game_number)})
+
                 inserted_id = cur.lastrowid
 
             except aiomysql.IntegrityError as e:
