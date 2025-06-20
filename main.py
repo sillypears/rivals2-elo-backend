@@ -1,6 +1,7 @@
 import os
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
 import aiomysql
 from typing import List
@@ -37,6 +38,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+websockets: List[WebSocket] = []
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return FileResponse('favicon.ico')
 
 @app.get("/matches")
 async def get_matches():
@@ -66,7 +72,7 @@ async def get_matches(offset:int = 0, limit: int = 10):
             rows = await cur.fetchall()
             return rows
 
-@app.get("stats")
+@app.get("/stats")
 async def get_stats(limit: int = 10, skip: int = 0, match_win: bool = True):
     if limit < 1: limit = 10
     if skip < 0: skip = 0
@@ -75,7 +81,8 @@ async def get_stats(limit: int = 10, skip: int = 0, match_win: bool = True):
             await cur.execute(f"SELECT * FROM matches WHERE match_win = {1 if match_win else 0} ORDER BY ranked_game_number DESC LIMIT {limit} OFFSET {skip}")
             rows = await cur.fetchall()
             return rows
-websockets: List[WebSocket] = []
+        
+
 
 @app.post("/insert-match")
 async def insert_match(match: Match, debug: bool = 0):

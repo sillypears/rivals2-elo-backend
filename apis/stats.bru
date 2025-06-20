@@ -1,0 +1,17 @@
+meta {
+  name: stats
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{schema}}://{{base_uri}}:{{base_port}}/stats
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~skip: 0
+  ~limit: 10
+  ~match_win: 0
+}

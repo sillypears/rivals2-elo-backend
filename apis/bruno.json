@@ -1,0 +1,9 @@
+{
+  "version": "1",
+  "name": "rivsals2-elo",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    ".git"
+  ]
+}
