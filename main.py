@@ -115,9 +115,9 @@ async def insert_match(match: Match, debug: bool = 0):
                 ))
                 await notify_websockets({'type': 'new_match', 'ranked_game_number': int(match.ranked_game_number)})
                 if match.match_win == 1:
-                    await notify_websockets({'type': 'new_win_match', 'ranked_game_number': int(match.ranked_game_number)})
-                elif match.win == 0:
-                    await notify_websockets({'type': 'new_lose_match', 'ranked_game_number': int(match.ranked_game_number)})
+                    await notify_websockets({'type': 'new_win_stats', 'ranked_game_number': int(match.ranked_game_number)})
+                elif match.match_win == 0:
+                    await notify_websockets({'type': 'new_lose_stats', 'ranked_game_number': int(match.ranked_game_number)})
 
                 inserted_id = cur.lastrowid
 
