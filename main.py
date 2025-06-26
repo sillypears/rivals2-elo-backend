@@ -125,6 +125,29 @@ async def insert_match(match: Match, debug: bool = 0):
                 return {"status": "failed", "error": e.args}
     return {"status": "ok", "last_id": inserted_id}
 
+@app.patch("/update-match/")
+async def update_match(update_value: dict):
+    try:
+        game_number = int(update_value['game_number'])
+    except:
+        return {"status": "failure", "message": "No ID provided"}
+    match_id_exists = None
+
+    async with app.state.db_pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            await cur.execute(f"SELECT id FROM matches WHERE ranked_game_number = {game_number}")
+            rows = await cur.fetchone()
+            match_id = rows["id"]
+
+    if match_id:
+        print(f"""UPDATE matches SET {update_value['key']}="{update_value['value']}" WHERE id = {match_id}""")
+        async with app.state.db_pool.acquire() as conn:
+            async with conn.cursor(aiomysql.DictCursor) as cur:
+                await cur.execute(f"""UPDATE matches SET {update_value['key']}="{update_value['value']}" WHERE id = {match_id}""")
+                rows = await cur.fetchall()
+                return {"status": "ok", "data": rows}
+    return 0
+
 @app.get("/seasons")
 async def get_seasons():
     async with app.state.db_pool.acquire() as conn:
