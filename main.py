@@ -44,6 +44,30 @@ websockets: List[WebSocket] = []
 async def favicon():
     return FileResponse('favicon.ico')
 
+@app.get("/characters")
+async def get_characters():
+    async with app.state.db_pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            await cur.execute(f"SELECT * FROM characters;")
+            rows = await cur.fetchall()
+            return rows
+
+@app.get("/stages")
+async def get_characters():
+    async with app.state.db_pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            await cur.execute(f"SELECT * FROM stages;")
+            rows = await cur.fetchall()
+            return rows
+
+@app.get("/seasons")
+async def get_seasons():
+    async with app.state.db_pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            await cur.execute(f"SELECT start_date, end_date, short_name, display_name FROM seasons")
+            rows = await cur.fetchall()
+            return rows
+        
 @app.get("/matches")
 async def get_matches():
     async with app.state.db_pool.acquire() as conn:
@@ -58,7 +82,7 @@ async def get_matches(limit:int=10):
     if limit < 1: limit = 1
     async with app.state.db_pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute(f"SELECT * FROM matches ORDER BY ranked_game_number DESC LIMIT {limit}")
+            await cur.execute(f"SELECT * FROM matches_vw ORDER BY ranked_game_number DESC LIMIT {limit}")
             rows = await cur.fetchall()
             return rows
 
@@ -68,7 +92,7 @@ async def get_matches(offset:int = 0, limit: int = 10):
     if offset < 0: offset = 0
     async with app.state.db_pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute(f"SELECT * FROM matches ORDER BY ranked_game_number DESC LIMIT {limit} OFFSET {offset}")
+            await cur.execute(f"SELECT * FROM matches_vw ORDER BY ranked_game_number DESC LIMIT {limit} OFFSET {offset}")
             rows = await cur.fetchall()
             return rows
 
@@ -78,7 +102,7 @@ async def get_stats(limit: int = 10, skip: int = 0, match_win: bool = True):
     if skip < 0: skip = 0
     async with app.state.db_pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute(f"SELECT * FROM matches WHERE match_win = {1 if match_win else 0} ORDER BY ranked_game_number DESC LIMIT {limit} OFFSET {skip}")
+            await cur.execute(f"SELECT * FROM matches_vw WHERE match_win = {1 if match_win else 0} ORDER BY ranked_game_number DESC LIMIT {limit} OFFSET {skip}")
             rows = await cur.fetchall()
             return sorted(rows, key=lambda x: x['ranked_game_number'])
         
@@ -147,15 +171,6 @@ async def update_match(update_value: dict):
                 rows = await cur.fetchall()
                 return {"status": "ok", "data": rows}
     return 0
-
-@app.get("/seasons")
-async def get_seasons():
-    async with app.state.db_pool.acquire() as conn:
-        async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute(f"SELECT start_date, end_date, short_name, display_name FROM seasons")
-            rows = await cur.fetchall()
-            return rows
-
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
