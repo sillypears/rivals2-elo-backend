@@ -13,6 +13,7 @@ class Match:
     total_wins: int
     win_streak_value: int
     opponent_elo: int
+    opponent_estimated_elo: int
     game_1_char_pick: Optional[int] = -1
     game_1_opponent_pick: Optional[int] = -1
     game_1_stage: Optional[int] = -1
