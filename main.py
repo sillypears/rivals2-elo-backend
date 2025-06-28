@@ -163,19 +163,21 @@ async def get_match_stats():
     query = ''' 
         SELECT
         game_count,
+        match_win,
         COUNT(*) AS match_count
         FROM (
         SELECT
             id,
+            match_win,
             -- Count how many of the 3 games have a valid winner (1 or 2)
             (CASE WHEN game_1_winner IN (1, 2) THEN 1 ELSE 0 END +
             CASE WHEN game_2_winner IN (1, 2) THEN 1 ELSE 0 END +
             CASE WHEN game_3_winner IN (1, 2) THEN 1 ELSE 0 END) AS game_count
         FROM rivals2.matches_vw
         ) AS counted_matches
-        GROUP BY game_count
-        HAVING game_count > 0
-        ORDER BY game_count DESC;
+        WHERE game_count > 0
+        GROUP BY game_count, match_win
+        ORDER BY game_count DESC, match_win DESC;
     '''
     async with app.state.db_pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
