@@ -72,7 +72,7 @@ async def get_seasons():
 async def get_matches():
     async with app.state.db_pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute(f"SELECT * FROM matches ORDER BY ranked_game_number DESC")
+            await cur.execute(f"SELECT * FROM matches_vw")
             rows = await cur.fetchall()
             return rows
 
