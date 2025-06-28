@@ -106,8 +106,58 @@ async def get_stats(limit: int = 10, skip: int = 0, match_win: bool = True):
             rows = await cur.fetchall()
             return sorted(rows, key=lambda x: x['ranked_game_number'])
         
+@app.get("/char-stats")
+async def get_char_stats():
+    query = '''
+        SELECT
+            opponent_pick,
+            SUM(CASE WHEN game_winner = 1 THEN 1 ELSE 0 END) AS wins,
+            SUM(CASE WHEN game_winner = 2 THEN 1 ELSE 0 END) AS losses,
+            COUNT(*) AS total_games,
+            ROUND(SUM(CASE WHEN game_winner = 1 THEN 1 ELSE 0 END) / COUNT(*) * 100, 2) AS win_percentage
+        FROM (
+            SELECT game_1_opponent_pick_name AS opponent_pick, game_1_winner AS game_winner FROM rivals2.matches_vw
+            UNION ALL
+            SELECT game_2_opponent_pick_name, game_2_winner FROM rivals2.matches_vw
+            UNION ALL
+            SELECT game_3_opponent_pick_name, game_3_winner FROM rivals2.matches_vw
+        ) AS games
+        WHERE opponent_pick NOT IN ('N/A', '') AND game_winner IN (1, 2)
+        GROUP BY opponent_pick
+        ORDER BY win_percentage DESC, total_games DESC;
+            '''
+    async with app.state.db_pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            await cur.execute(query)
+            rows = await cur.fetchall()
+            return rows
 
-
+@app.get("/stage-stats")
+async def get_stage_stats():
+    query = '''
+        SELECT
+            stage_name,
+            SUM(CASE WHEN game_winner = 1 THEN 1 ELSE 0 END) AS wins,
+            SUM(CASE WHEN game_winner = 2 THEN 1 ELSE 0 END) AS losses,
+            COUNT(*) AS total_games,
+            ROUND(SUM(CASE WHEN game_winner = 1 THEN 1 ELSE 0 END) / COUNT(*) * 100, 2) AS win_percentage
+        FROM (
+            SELECT game_1_stage_name AS stage_name, game_1_winner AS game_winner FROM rivals2.matches_vw
+            UNION ALL
+            SELECT game_2_stage_name, game_2_winner FROM rivals2.matches_vw
+            UNION ALL
+            SELECT game_3_stage_name, game_3_winner FROM rivals2.matches_vw
+        ) AS games
+        WHERE stage_name NOT IN ('N/A', '') AND game_winner IN (1, 2)
+        GROUP BY stage_name
+        ORDER BY win_percentage DESC, total_games DESC;
+            '''
+    async with app.state.db_pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            await cur.execute(query)
+            rows = await cur.fetchall()
+            return rows
+        
 @app.post("/insert-match")
 async def insert_match(match: Match, debug: bool = 0):
     query = '''
