@@ -9,6 +9,7 @@ class Match:
     elo_rank_new: int
     elo_change: int
     match_win: int
+    match_forfeit: int
     ranked_game_number: int
     total_wins: int
     win_streak_value: int
