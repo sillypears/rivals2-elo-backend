@@ -82,7 +82,7 @@ async def get_matches(limit:int=10):
     if limit < 1: limit = 1
     async with app.state.db_pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute(f"SELECT * FROM matches_vw ORDER BY ranked_game_number DESC LIMIT {limit}")
+            await cur.execute(f"SELECT * FROM matches_vw LIMIT {limit}")
             rows = await cur.fetchall()
             return rows
 
@@ -92,7 +92,7 @@ async def get_matches(offset:int = 0, limit: int = 10):
     if offset < 0: offset = 0
     async with app.state.db_pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute(f"SELECT * FROM matches_vw ORDER BY ranked_game_number DESC LIMIT {limit} OFFSET {offset}")
+            await cur.execute(f"SELECT * FROM matches_vw LIMIT {limit} OFFSET {offset}")
             rows = await cur.fetchall()
             return rows
 
