@@ -228,18 +228,22 @@ async def insert_match(match: Match, debug: bool = 0):
 
 @app.patch("/update-match/")
 async def update_match(update_value: dict):
+    # try:
+    #     game_number = int(update_value['game_number'])
+    # except:
+    #     return {"status": "failure", "message": "No ID provided"}
+    # match_id_exists = None
+
+    # async with app.state.db_pool.acquire() as conn:
+    #     async with conn.cursor(aiomysql.DictCursor) as cur:
+    #         await cur.execute(f"SELECT id FROM matches WHERE ranked_game_number = {game_number}")
+    #         rows = await cur.fetchone()
+    #         match_id = rows["id"]
+
     try:
-        game_number = int(update_value['game_number'])
-    except:
-        return {"status": "failure", "message": "No ID provided"}
-    match_id_exists = None
-
-    async with app.state.db_pool.acquire() as conn:
-        async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute(f"SELECT id FROM matches WHERE ranked_game_number = {game_number}")
-            rows = await cur.fetchone()
-            match_id = rows["id"]
-
+        match_id = int(update_value['row_id'])
+    except (ValueError, KeyError):
+        return {"status": "failure", "message": "No ID provided or invalid ID format"}
     if match_id:
         print(f"""UPDATE matches SET {update_value['key']}="{update_value['value']}" WHERE id = {match_id}""")
         async with app.state.db_pool.acquire() as conn:
