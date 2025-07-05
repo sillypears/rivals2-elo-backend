@@ -184,6 +184,59 @@ async def get_match_stats():
             await cur.execute(query)
             rows = await cur.fetchall()
             return rows
+@app.get("/match-stage-stats")
+async def get_match_stage_stats():
+    query = '''
+SELECT 
+  s.id,
+  s.display_name AS stage_name,
+  COUNT(*) AS times_picked,
+  CASE 
+    WHEN m.stage_num = 1 THEN 'Starter'
+    ELSE 'Counterpick'
+  END AS pick_type
+FROM (
+  -- Include game_1_winner in game 1 rows
+  SELECT game_1_stage AS stage_id, 1 AS stage_num, game_1_winner FROM matches_vw
+  UNION ALL
+  -- Dummy value for game_1_winner in game 2 and 3 rows (will be ignored)
+  SELECT game_2_stage, 2, NULL FROM matches_vw
+  UNION ALL
+  SELECT game_3_stage, 3, NULL FROM matches_vw
+) m
+JOIN stages s ON m.stage_id = s.id
+WHERE 
+  (m.stage_num = 1 AND s.id != -1) -- only apply filter to game 1 rows
+  OR (m.stage_num IN (2,3) AND s.counter_pick = 1)
+  AND s.id != -1
+GROUP BY s.id, s.display_name, pick_type
+ORDER BY times_picked DESC, s.display_name, pick_type;
+
+    '''
+    async with app.state.db_pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            await cur.execute(query)
+            rows = await cur.fetchall()
+            return rows
+    
+@app.get("/match/forfeits")
+async def get_match_forfeits():
+    query = '''
+        SELECT 
+            COUNT(match_win) AS forfeits
+        FROM
+            matches_vw
+        WHERE
+            match_forfeit = 1
+            AND match_win = 1
+    '''
+    async with app.state.db_pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            await cur.execute(query)
+            rows = await cur.fetchone()
+            if rows is None:
+                return {"status": "FAIL", "data": {"forfeits": 0}}
+            return {"status": "OK", "data": rows} 
         
 @app.post("/insert-match")
 async def insert_match(match: Match, debug: bool = 0):
