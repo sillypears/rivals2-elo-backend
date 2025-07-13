@@ -270,6 +270,29 @@ async def get_elo_changes(match_number:int = 10):
                 return {"status": "FAIL", "data": {}}
             return {"status": "OK", "data": rows}
 
+@app.get("/all-seasons-stats")
+async def get_all_seasons_stats():
+    query = '''
+        SELECT
+        season_display_name,
+        COUNT(*) AS total_matches,
+        SUM(CASE WHEN match_win = 1 THEN 1 ELSE 0 END) AS match_wins,
+        SUM(CASE WHEN match_win = 0 THEN 1 ELSE 0 END) AS match_losses,
+        SUM(elo_change) AS total_elo_change,
+        ROUND(AVG(match_win) * 100, 2) AS win_rate_percent
+        FROM matches_vw
+        GROUP BY season_display_name
+        ORDER BY season_id DESC;
+
+    '''
+    async with app.state.db_pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            await cur.execute(query)
+            rows = await cur.fetchall()
+            if rows is None:
+                return {"status": "FAIL", "data": {}}
+            return {"status": "OK", "data": rows}
+
 @app.post("/insert-match")
 async def insert_match(match: Match, debug: bool = 0):
     query = '''
