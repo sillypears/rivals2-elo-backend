@@ -184,33 +184,32 @@ async def get_match_stats():
             await cur.execute(query)
             rows = await cur.fetchall()
             return rows
+        
 @app.get("/match-stage-stats")
 async def get_match_stage_stats():
     query = '''
-SELECT 
-  s.id,
-  s.display_name AS stage_name,
-  COUNT(*) AS times_picked,
-  CASE 
-    WHEN m.stage_num = 1 THEN 'Starter'
-    ELSE 'Counterpick'
-  END AS pick_type
-FROM (
-  -- Include game_1_winner in game 1 rows
-  SELECT game_1_stage AS stage_id, 1 AS stage_num, game_1_winner FROM matches_vw
-  UNION ALL
-  -- Dummy value for game_1_winner in game 2 and 3 rows (will be ignored)
-  SELECT game_2_stage, 2, NULL FROM matches_vw
-  UNION ALL
-  SELECT game_3_stage, 3, NULL FROM matches_vw
-) m
-JOIN stages s ON m.stage_id = s.id
-WHERE 
-  (m.stage_num = 1 AND s.id != -1) -- only apply filter to game 1 rows
-  OR (m.stage_num IN (2,3) AND s.counter_pick = 1)
-  AND s.id != -1
-GROUP BY s.id, s.display_name, pick_type
-ORDER BY times_picked DESC, s.display_name, pick_type;
+        SELECT 
+        s.id,
+        s.display_name AS stage_name,
+        COUNT(*) AS times_picked,
+        CASE 
+            WHEN m.stage_num = 1 THEN 'Starter'
+            ELSE 'Counterpick'
+        END AS pick_type
+        FROM (
+        SELECT game_1_stage AS stage_id, 1 AS stage_num, game_1_winner FROM matches_vw
+        UNION ALL
+        SELECT game_2_stage, 2, NULL FROM matches_vw
+        UNION ALL
+        SELECT game_3_stage, 3, NULL FROM matches_vw
+        ) m
+        JOIN stages s ON m.stage_id = s.id
+        WHERE 
+        (m.stage_num = 1 AND s.id != -1) -- only apply filter to game 1 rows
+        OR (m.stage_num IN (2,3) AND s.counter_pick = 1)
+        AND s.id != -1
+        GROUP BY s.id, s.display_name, pick_type
+        ORDER BY times_picked DESC, s.display_name, pick_type;
 
     '''
     async with app.state.db_pool.acquire() as conn:
@@ -237,7 +236,40 @@ async def get_match_forfeits():
             if rows is None:
                 return {"status": "FAIL", "data": {"forfeits": 0}}
             return {"status": "OK", "data": rows} 
-        
+
+@app.get("/elo-change")
+@app.get("/elo-change/{match_number}")
+async def get_elo_changes(match_number:int = 10):
+    if match_number % 2 != 0: match_number += 1
+    query = f'''
+        SELECT
+        (SELECT SUM(elo_change)
+        FROM (
+            SELECT elo_change
+            FROM matches_vw m
+            WHERE match_win = 1
+            ORDER BY id DESC
+            LIMIT {int(match_number/2)}
+        ) AS wins) AS elo_change_plus,
+
+        (SELECT SUM(elo_change)
+        FROM (
+            SELECT elo_change
+            FROM matches_vw m
+            WHERE match_win = 0
+            ORDER BY id DESC
+            LIMIT {int(match_number/2)}
+        ) AS losses) AS elo_change_minus,
+        (SELECT (elo_change_plus - abs(elo_change_minus))) as difference
+    '''
+    async with app.state.db_pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            await cur.execute(query)
+            rows = await cur.fetchone()
+            if rows is None:
+                return {"status": "FAIL", "data": {}}
+            return {"status": "OK", "data": rows}
+
 @app.post("/insert-match")
 async def insert_match(match: Match, debug: bool = 0):
     query = '''
