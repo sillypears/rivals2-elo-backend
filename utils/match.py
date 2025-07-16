@@ -31,3 +31,5 @@ class Match:
     game_3_stage: Optional[int] = -1
     game_3_stage_name: Optional[int] = -1
     game_3_winner: Optional[int] = -1
+    season_id: Optional[int] = None
+    final_move_id: Optional[int] = -1
