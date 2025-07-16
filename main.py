@@ -67,7 +67,15 @@ async def get_seasons():
             await cur.execute(f"SELECT start_date, end_date, short_name, display_name FROM seasons")
             rows = await cur.fetchall()
             return rows
-        
+
+@app.get("/movelist")
+async def get_movelist():
+    async with app.state.db_pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            await cur.execute(f"SELECT * FROM moves")
+            rows = await cur.fetchall()
+            return rows
+
 @app.get("/matches")
 async def get_matches():
     async with app.state.db_pool.acquire() as conn:
@@ -169,13 +177,18 @@ async def get_match_stats():
         SELECT
             id,
             match_win,
-            -- Count how many of the 3 games have a valid winner (1 or 2)
-            (CASE WHEN game_1_winner IN (1, 2) THEN 1 ELSE 0 END +
-            CASE WHEN game_2_winner IN (1, 2) THEN 1 ELSE 0 END +
-            CASE WHEN game_3_winner IN (1, 2) THEN 1 ELSE 0 END) AS game_count
-        FROM rivals2.matches_vw
+            match_forfeit,
+            (
+            CASE WHEN game_1_winner = 1 THEN 1 ELSE 0 END +
+            CASE WHEN game_2_winner = 1 THEN 1 ELSE 0 END +
+            CASE WHEN game_3_winner = 1 THEN 1 ELSE 0 END
+            ) AS game_count
+        FROM matches
         ) AS counted_matches
-        WHERE game_count > 0
+        WHERE NOT (
+        (game_count = 0 AND match_win = 1 AND match_forfeit = 0)
+        OR (game_count = 0 AND match_win = 0)
+        )
         GROUP BY game_count, match_win
         ORDER BY game_count DESC, match_win DESC;
     '''
