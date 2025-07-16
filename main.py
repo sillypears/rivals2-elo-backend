@@ -249,7 +249,7 @@ async def get_elo_changes(match_number:int = 10):
             FROM matches_vw m
             WHERE match_win = 1
             ORDER BY id DESC
-            LIMIT {int(match_number/2)}
+            LIMIT {int(match_number)}
         ) AS wins) AS elo_change_plus,
 
         (SELECT SUM(elo_change)
@@ -258,7 +258,7 @@ async def get_elo_changes(match_number:int = 10):
             FROM matches_vw m
             WHERE match_win = 0
             ORDER BY id DESC
-            LIMIT {int(match_number/2)}
+            LIMIT {int(match_number)}
         ) AS losses) AS elo_change_minus,
         (SELECT (elo_change_plus - abs(elo_change_minus))) as difference
     '''
@@ -336,18 +336,6 @@ async def insert_match(match: Match, debug: bool = 0):
 
 @app.patch("/update-match/")
 async def update_match(update_value: dict):
-    # try:
-    #     game_number = int(update_value['game_number'])
-    # except:
-    #     return {"status": "failure", "message": "No ID provided"}
-    # match_id_exists = None
-
-    # async with app.state.db_pool.acquire() as conn:
-    #     async with conn.cursor(aiomysql.DictCursor) as cur:
-    #         await cur.execute(f"SELECT id FROM matches WHERE ranked_game_number = {game_number}")
-    #         rows = await cur.fetchone()
-    #         match_id = rows["id"]
-
     try:
         match_id = int(update_value['row_id'])
     except (ValueError, KeyError):
@@ -368,13 +356,19 @@ async def websocket_endpoint(websocket: WebSocket):
     try:
         while True:
             try:
-                await asyncio.wait_for(websocket.receive_text(), timeout=30)
+                nmessage = await asyncio.wait_for(websocket.receive_text(), timeout=30)
+                nmessage_data = {}
+                try:
+                    nmessage_data = json.loads(nmessage)
+                except:
+                    pass
+                await notify_websockets(nmessage_data)
             except asyncio.TimeoutError:
-                await websocket.send_text("ping")  # optional keep-alive
+                await websocket.send_text("ping")
     except WebSocketDisconnect:
         websockets.remove(websocket)
     except Exception:
-        websockets.remove(websocket)  # catch-all for disconnects
+        websockets.remove(websocket)
 
 async def notify_websockets(message: dict):
     for ws in websockets[:]: 
