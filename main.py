@@ -283,6 +283,25 @@ async def get_elo_changes(match_number:int = 10):
                 return {"status": "FAIL", "data": {}}
             return {"status": "OK", "data": rows}
 
+@app.get("/final-move-stats")
+async def get_final_move_stats():
+    query = '''
+        SELECT 
+            m.final_move_name, COUNT(m.final_move_name), m.season_display_name
+        FROM
+            matches_vw m
+        WHERE
+            m.match_win = 1 AND m.final_move_id != - 1
+        GROUP BY m.final_move_name , m.season_display_name
+    '''
+    async with app.state.db_pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            await cur.execute(query)
+            rows = await cur.fetchall()
+            if rows is None:
+                return {"status": "FAIL", "data": {}}
+            return {"status": "OK", "data": rows}
+
 @app.get("/all-seasons-stats")
 async def get_all_seasons_stats():
     query = '''
@@ -327,6 +346,12 @@ async def insert_match(match: Match, debug: bool = 0):
     async with app.state.db_pool.acquire() as conn:
         async with conn.cursor() as cur:
             try:
+                print(                    match.match_date,
+                    match.elo_rank_old, match.elo_rank_new, match.elo_change, match.match_win, match.match_forfeit,
+                    match.ranked_game_number, match.total_wins, match.win_streak_value, match.opponent_elo, match.opponent_estimated_elo, match.opponent_name,
+                    match.game_1_char_pick, match.game_1_opponent_pick, match.game_1_stage, match.game_1_winner,
+                    match.game_2_char_pick, match.game_2_opponent_pick, match.game_2_stage, match.game_2_winner,
+                    match.game_3_char_pick, match.game_3_opponent_pick, match.game_3_stage, match.game_3_winner, match.final_move_id)
                 await cur.execute(query, (
                     match.match_date,
                     match.elo_rank_old, match.elo_rank_new, match.elo_change, match.match_win, match.match_forfeit,
@@ -343,7 +368,7 @@ async def insert_match(match: Match, debug: bool = 0):
 
                 inserted_id = cur.lastrowid
 
-            except aiomysql.IntegrityError as e:
+            except Exception as e:
                 return {"status": "failed", "error": e.args}
     return {"status": "ok", "last_id": inserted_id}
 
