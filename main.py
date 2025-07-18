@@ -357,34 +357,31 @@ async def insert_match(match: Match, debug: bool = 0):
         INSERT INTO matches (
             match_date, elo_rank_old, elo_rank_new, elo_change, match_win, match_forfeit,
             ranked_game_number, total_wins, win_streak_value, opponent_elo, opponent_estimated_elo, opponent_name,
-            game_1_char_pick, game_1_opponent_pick, game_1_stage, game_1_winner,
-            game_2_char_pick, game_2_opponent_pick, game_2_stage, game_2_winner,
-            game_3_char_pick, game_3_opponent_pick, game_3_stage, game_3_winner, final_move_id
+            game_1_char_pick, game_1_opponent_pick, game_1_stage, game_1_winner, game_1_final_move_id,
+            game_2_char_pick, game_2_opponent_pick, game_2_stage, game_2_winner, game_2_final_move_id,
+            game_3_char_pick, game_3_opponent_pick, game_3_stage, game_3_winner, game_3_final_move_id, 
+            final_move_id
         ) VALUES (
             %s, %s, %s, %s, %s, %s, 
             %s, %s, %s, %s, %s, %s,
-            %s, %s, %s, %s,
-            %s, %s, %s, %s,
-            %s, %s, %s, %s, %s
+            %s, %s, %s, %s, %s,
+            %s, %s, %s, %s, %s,
+            %s, %s, %s, %s, %s,
+            %s
         )
     '''
     inserted_id = -1
     async with app.state.db_pool.acquire() as conn:
         async with conn.cursor() as cur:
             try:
-                print(                    match.match_date,
-                    match.elo_rank_old, match.elo_rank_new, match.elo_change, match.match_win, match.match_forfeit,
-                    match.ranked_game_number, match.total_wins, match.win_streak_value, match.opponent_elo, match.opponent_estimated_elo, match.opponent_name,
-                    match.game_1_char_pick, match.game_1_opponent_pick, match.game_1_stage, match.game_1_winner,
-                    match.game_2_char_pick, match.game_2_opponent_pick, match.game_2_stage, match.game_2_winner,
-                    match.game_3_char_pick, match.game_3_opponent_pick, match.game_3_stage, match.game_3_winner, match.final_move_id)
                 await cur.execute(query, (
                     match.match_date,
                     match.elo_rank_old, match.elo_rank_new, match.elo_change, match.match_win, match.match_forfeit,
                     match.ranked_game_number, match.total_wins, match.win_streak_value, match.opponent_elo, match.opponent_estimated_elo, match.opponent_name,
-                    match.game_1_char_pick, match.game_1_opponent_pick, match.game_1_stage, match.game_1_winner,
-                    match.game_2_char_pick, match.game_2_opponent_pick, match.game_2_stage, match.game_2_winner,
-                    match.game_3_char_pick, match.game_3_opponent_pick, match.game_3_stage, match.game_3_winner, match.final_move_id
+                    match.game_1_char_pick, match.game_1_opponent_pick, match.game_1_stage, match.game_1_winner, match.game_1_final_move_id,
+                    match.game_2_char_pick, match.game_2_opponent_pick, match.game_2_stage, match.game_2_winner, match.game_2_final_move_id,
+                    match.game_3_char_pick, match.game_3_opponent_pick, match.game_3_stage, match.game_3_winner, match.game_3_final_move_id,
+                    match.final_move_id
                 ))
                 await notify_websockets({'type': 'new_match', 'ranked_game_number': int(match.ranked_game_number)})
                 if match.match_win == 1:
