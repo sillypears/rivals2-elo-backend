@@ -128,6 +128,36 @@ async def get_matches(req: Request, offset:int = 0, limit: int = 10):
     '''
     return await db_fetch_all(request=req, query=query)
 
+@app.get("/match")
+@app.get("/match/{id}")
+async def get_match(req: Request, id: int = -1):
+    if id < 1:
+        try:
+            data = await get_latest_match_id(req)
+            id = data['data']['latest_id']
+        except:
+            id = 1
+    query = f'''
+        SELECT 
+            *
+        FROM
+            matches_vw
+        WHERE id = {int(id)}
+    '''
+    return await db_fetch_one(request=req, query=query)
+
+@app.get("/match/forfeits")
+async def get_match_forfeits(req: Request):
+    query = '''
+        SELECT 
+            COUNT(match_win) AS forfeits
+        FROM
+            matches_vw
+        WHERE
+            match_forfeit = 1
+            AND match_win = 1
+    '''
+    return await db_fetch_one(request=req, query=query)
 
 @app.get("/stats")
 async def get_stats(req: Request, limit: int = 10, skip: int = 0, match_win: bool = True):
@@ -249,20 +279,6 @@ async def get_match_stage_stats(req: Request):
 
     '''
     return await db_fetch_all(request=req, query=query)
-    
-@app.get("/match/forfeits")
-async def get_match_forfeits(req: Request):
-    query = '''
-        SELECT 
-            COUNT(match_win) AS forfeits
-        FROM
-            matches_vw
-        WHERE
-            match_forfeit = 1
-            AND match_win = 1
-    '''
-    return await db_fetch_one(request=req, query=query)
-
 
 @app.get("/elo-change")
 @app.get("/elo-change/{match_number}")
@@ -426,3 +442,13 @@ async def notify_websockets(message: dict):
         except Exception:
             print("WebSocket failed; removing")
             websockets.remove(ws)
+
+
+async def get_latest_match_id(req: Request):
+    query = f'''
+        SELECT 
+            MAX(id) as latest_id
+        FROM
+            matches_vw
+    '''
+    return await db_fetch_one(request=req, query=query)
