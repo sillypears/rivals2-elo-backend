@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
@@ -9,8 +9,9 @@ from dotenv import load_dotenv
 from utils.match import Match
 import asyncio
 import json
-
+from typing import Any, List, Dict
 from pydantic import TypeAdapter
+
 load_dotenv()
 
 @asynccontextmanager
@@ -29,6 +30,25 @@ async def lifespan(app: FastAPI):
         pool.close()
         await pool.wait_closed()
 
+
+async def db_fetch_all(request: Request, query: str, params: tuple = ()) -> Dict[str, Any]:
+    async with request.app.state.db_pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            await cur.execute(query, params)
+            rows = await cur.fetchall()
+            if rows is None:
+                return {"status": "FAIL", "data": []}
+            return {"status": "OK", "data": rows}
+
+async def db_fetch_one(request: Request, query: str, params: tuple = ()) -> Dict[str, Any]:
+    async with request.app.state.db_pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            await cur.execute(query, params)
+            rows = await cur.fetchone()
+            if rows is None:
+                return {"status": "FAIL", "data": []}
+            return {"status": "OK", "data": rows}
+
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
@@ -45,77 +65,88 @@ async def favicon():
     return FileResponse('favicon.ico')
 
 @app.get("/characters")
-async def get_characters():
-    async with app.state.db_pool.acquire() as conn:
-        async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute(f"SELECT * FROM characters;")
-            rows = await cur.fetchall()
-            return rows
+async def get_characters(req: Request):
+    query = '''
+        SELECT * FROM characters
+    '''
+    return await db_fetch_all(request=req, query=query)
+
+
 
 @app.get("/stages")
-async def get_characters():
-    async with app.state.db_pool.acquire() as conn:
-        async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute(f"SELECT * FROM stages;")
-            rows = await cur.fetchall()
-            return rows
+async def get_characters(req: Request):
+    query = '''
+        SELECT * FROM stages
+    '''
+    return await db_fetch_all(request=req, query=query)
+
 
 @app.get("/seasons")
-async def get_seasons():
-    async with app.state.db_pool.acquire() as conn:
-        async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute(f"SELECT start_date, end_date, short_name, display_name FROM seasons")
-            rows = await cur.fetchall()
-            return rows
+async def get_seasons(req: Request):
+
+    query = f'''
+        SELECT 
+            start_date, 
+            end_date, 
+            short_name, 
+            display_name 
+        FROM seasons
+    '''
+    return await db_fetch_all(request=req, query=query)
+
 
 @app.get("/movelist")
-async def get_movelist():
-    async with app.state.db_pool.acquire() as conn:
-        async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute(f"SELECT * FROM moves")
-            rows = await cur.fetchall()
-            return rows
+async def get_movelist(req: Request):
+    query = '''
+        SELECT * FROM moves
+    '''
+    return await db_fetch_all(request=req, query=query)
 
 @app.get("/matches")
-async def get_matches():
-    async with app.state.db_pool.acquire() as conn:
-        async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute(f"SELECT * FROM matches_vw")
-            rows = await cur.fetchall()
-            return rows
-
-
 @app.get("/matches/{limit}")
-async def get_matches(limit:int=10):
-    if limit < 1: limit = 1
-    async with app.state.db_pool.acquire() as conn:
-        async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute(f"SELECT * FROM matches_vw LIMIT {limit}")
-            rows = await cur.fetchall()
-            return rows
+async def get_matches(req: Request, limit: int=None):
+    try:
+        if limit < 1: limit = 1
+    except:
+        limit = 0
+    query = f'''
+        SELECT * FROM matches_vw 
+        {"LIMIT" if int(limit) else ''} {int(limit) if int(limit) else ''}
+    '''
+    return await db_fetch_all(request=req, query=query)
+
 
 @app.get("/matches/{offset}/{limit}")
-async def get_matches(offset:int = 0, limit: int = 10):
+async def get_matches(req: Request, offset:int = 0, limit: int = 10):
     if limit < 1: limit = 1
     if offset < 0: offset = 0
-    async with app.state.db_pool.acquire() as conn:
-        async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute(f"SELECT * FROM matches_vw LIMIT {limit} OFFSET {offset}")
-            rows = await cur.fetchall()
-            return rows
+    query = f'''
+        SELECT * FROM matches_vw 
+        LIMIT {limit} 
+        OFFSET {offset}
+    '''
+    return await db_fetch_all(request=req, query=query)
+
 
 @app.get("/stats")
-async def get_stats(limit: int = 10, skip: int = 0, match_win: bool = True):
+async def get_stats(req: Request, limit: int = 10, skip: int = 0, match_win: bool = True):
     if limit < 1: limit = 10
     if skip < 0: skip = 0
+    query = f'''
+        SELECT * FROM matches_vw
+        WHERE match_win = {1 if match_win else 0} 
+        ORDER BY ranked_game_number DESC 
+        LIMIT {limit} 
+        OFFSET {skip}
+    '''
     async with app.state.db_pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute(f"SELECT * FROM matches_vw WHERE match_win = {1 if match_win else 0} ORDER BY ranked_game_number DESC LIMIT {limit} OFFSET {skip}")
+            await cur.execute(query)
             rows = await cur.fetchall()
             return sorted(rows, key=lambda x: x['ranked_game_number'])
         
 @app.get("/char-stats")
-async def get_char_stats():
+async def get_char_stats(req: Request):
     query = '''
         SELECT
             opponent_pick,
@@ -134,14 +165,11 @@ async def get_char_stats():
         GROUP BY opponent_pick
         ORDER BY win_percentage DESC, total_games DESC;
             '''
-    async with app.state.db_pool.acquire() as conn:
-        async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute(query)
-            rows = await cur.fetchall()
-            return rows
+    return await db_fetch_all(request=req, query=query)
+
 
 @app.get("/stage-stats")
-async def get_stage_stats():
+async def get_stage_stats(req: Request):
     query = '''
         SELECT
             stage_name,
@@ -160,14 +188,11 @@ async def get_stage_stats():
         GROUP BY stage_name
         ORDER BY win_percentage DESC, total_games DESC;
             '''
-    async with app.state.db_pool.acquire() as conn:
-        async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute(query)
-            rows = await cur.fetchall()
-            return rows
+    return await db_fetch_all(request=req, query=query)
+
 
 @app.get("/match-stats")
-async def get_match_stats():
+async def get_match_stats(req: Request):
     query = ''' 
         SELECT
         game_count,
@@ -192,14 +217,11 @@ async def get_match_stats():
         GROUP BY game_count, match_win
         ORDER BY game_count DESC, match_win DESC;
     '''
-    async with app.state.db_pool.acquire() as conn:
-        async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute(query)
-            rows = await cur.fetchall()
-            return rows
+    return await db_fetch_all(request=req, query=query)
+
         
 @app.get("/match-stage-stats")
-async def get_match_stage_stats():
+async def get_match_stage_stats(req: Request):
     query = '''
         SELECT 
         s.id,
@@ -225,14 +247,10 @@ async def get_match_stage_stats():
         ORDER BY times_picked DESC, s.display_name, pick_type;
 
     '''
-    async with app.state.db_pool.acquire() as conn:
-        async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute(query)
-            rows = await cur.fetchall()
-            return rows
+    return await db_fetch_all(request=req, query=query)
     
 @app.get("/match/forfeits")
-async def get_match_forfeits():
+async def get_match_forfeits(req: Request):
     query = '''
         SELECT 
             COUNT(match_win) AS forfeits
@@ -242,17 +260,12 @@ async def get_match_forfeits():
             match_forfeit = 1
             AND match_win = 1
     '''
-    async with app.state.db_pool.acquire() as conn:
-        async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute(query)
-            rows = await cur.fetchone()
-            if rows is None:
-                return {"status": "FAIL", "data": {"forfeits": 0}}
-            return {"status": "OK", "data": rows} 
+    return await db_fetch_one(request=req, query=query)
+
 
 @app.get("/elo-change")
 @app.get("/elo-change/{match_number}")
-async def get_elo_changes(match_number:int = 10):
+async def get_elo_changes(req: Request, match_number:int = 10):
     if match_number % 2 != 0: match_number += 1
     query = f'''
         SELECT
@@ -275,35 +288,27 @@ async def get_elo_changes(match_number:int = 10):
         ) AS losses) AS elo_change_minus,
         (SELECT (elo_change_plus - abs(elo_change_minus))) as difference
     '''
-    async with app.state.db_pool.acquire() as conn:
-        async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute(query)
-            rows = await cur.fetchone()
-            if rows is None:
-                return {"status": "FAIL", "data": {}}
-            return {"status": "OK", "data": rows}
+    return await db_fetch_one(request=req, query=query)
+
 
 @app.get("/final-move-stats")
-async def get_final_move_stats():
+async def get_final_move_stats(req: Request):
     query = '''
         SELECT 
-            m.final_move_name, COUNT(m.final_move_name), m.season_display_name
+            m.final_move_name, 
+            COUNT(m.final_move_name) as final_move_count,
+            m.final_move_short,
+            m.season_display_name
         FROM
             matches_vw m
         WHERE
             m.match_win = 1 AND m.final_move_id != - 1
         GROUP BY m.final_move_name , m.season_display_name
     '''
-    async with app.state.db_pool.acquire() as conn:
-        async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute(query)
-            rows = await cur.fetchall()
-            if rows is None:
-                return {"status": "FAIL", "data": {}}
-            return {"status": "OK", "data": rows}
+    return await db_fetch_all(request=req, query=query)
 
 @app.get("/all-seasons-stats")
-async def get_all_seasons_stats():
+async def get_all_seasons_stats(req: Request):
     query = '''
         SELECT
         season_display_name,
@@ -317,13 +322,7 @@ async def get_all_seasons_stats():
         ORDER BY season_id DESC;
 
     '''
-    async with app.state.db_pool.acquire() as conn:
-        async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute(query)
-            rows = await cur.fetchall()
-            if rows is None:
-                return {"status": "FAIL", "data": {}}
-            return {"status": "OK", "data": rows}
+    return await db_fetch_all(request=req, query=query)
 
 @app.post("/insert-match")
 async def insert_match(match: Match, debug: bool = 0):
