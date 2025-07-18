@@ -267,27 +267,37 @@ async def get_match_forfeits(req: Request):
 @app.get("/elo-change")
 @app.get("/elo-change/{match_number}")
 async def get_elo_changes(req: Request, match_number:int = 10):
-    if match_number % 2 != 0: match_number += 1
+    if match_number < 1: match_number = 1
     query = f'''
         SELECT
-        (SELECT SUM(elo_change)
+        elo_change_plus,
+        elo_change_minus,
+        (elo_change_plus - ABS(elo_change_minus)) AS difference
         FROM (
-            SELECT elo_change
-            FROM matches_vw m
+        SELECT
+            COALESCE((
+            SELECT SUM(elo_change)
+            FROM (
+                SELECT match_win, elo_change
+                FROM matches_vw
+                ORDER BY id DESC
+                LIMIT {int(match_number)}
+            ) AS recent
             WHERE match_win = 1
-            ORDER BY id DESC
-            LIMIT {int(match_number)}
-        ) AS wins) AS elo_change_plus,
+            ), 0) AS elo_change_plus,
 
-        (SELECT SUM(elo_change)
-        FROM (
-            SELECT elo_change
-            FROM matches_vw m
+            COALESCE((
+            SELECT SUM(elo_change)
+            FROM (
+                SELECT match_win, elo_change
+                FROM matches_vw
+                ORDER BY id DESC
+                LIMIT {int(match_number)}
+            ) AS recent
             WHERE match_win = 0
-            ORDER BY id DESC
-            LIMIT {int(match_number)}
-        ) AS losses) AS elo_change_minus,
-        (SELECT (elo_change_plus - abs(elo_change_minus))) as difference
+            ), 0) AS elo_change_minus
+        ) AS stats;
+
     '''
     return await db_fetch_one(request=req, query=query)
 
