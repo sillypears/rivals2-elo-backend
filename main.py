@@ -86,6 +86,7 @@ async def get_seasons(req: Request):
 
     query = f'''
         SELECT 
+            id,
             start_date, 
             end_date, 
             short_name, 
