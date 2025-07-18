@@ -322,15 +322,38 @@ async def get_elo_changes(req: Request, match_number:int = 10):
 async def get_final_move_stats(req: Request):
     query = '''
         SELECT 
-            m.final_move_name, 
-            COUNT(m.final_move_name) as final_move_count,
-            m.final_move_short,
-            m.season_display_name
+            final_move_short,
+            final_move_name,
+            COUNT(final_move_name) AS final_move_count,
+            season_display_name
         FROM
-            matches_vw m
-        WHERE
-            m.match_win = 1 AND m.final_move_id != - 1
-        GROUP BY m.final_move_name , m.season_display_name
+            (SELECT 
+                game_1_final_move_name AS final_move_name,
+                    game_1_final_move_short AS final_move_short,
+                    season_display_name
+            FROM
+                matches_vw
+            WHERE
+                game_1_final_move_id <> - 1
+                    AND game_1_winner = 1 UNION ALL SELECT 
+                game_2_final_move_name AS final_move_name,
+                    game_2_final_move_short AS final_move_short,
+                    season_display_name
+            FROM
+                matches_vw
+            WHERE
+                game_2_final_move_id <> - 1
+                    AND game_2_winner = 1 UNION ALL SELECT 
+                game_3_final_move_name AS final_move_name,
+                    game_3_final_move_short AS final_move_short,
+                    season_display_name
+            FROM
+                matches_vw
+            WHERE
+                game_3_final_move_id <> - 1
+                    AND game_3_winner = 1) AS all_winnings
+        GROUP BY final_move_name
+        ORDER BY final_move_count DESC;
     '''
     return await db_fetch_all(request=req, query=query)
 
