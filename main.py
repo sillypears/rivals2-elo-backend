@@ -95,6 +95,42 @@ async def get_seasons(req: Request):
     '''
     return await db_fetch_all(request=req, query=query)
 
+@app.get("/ranked_tiers")
+async def get_ranked_tier_list(req: Request):
+
+    query = f'''
+        SELECT 
+            *
+        FROM tiers
+    '''
+    return await db_fetch_all(request=req, query=query)
+
+@app.get("/current_tier")
+async def get_current_tier(req: Request):
+    try:
+        tiers = await get_ranked_tier_list(req)
+        query = f'''
+            SELECT
+                elo_rank_new
+            FROM
+                matches_vw
+            ORDER BY id DESC
+            LIMIT 1
+        '''
+        elo_raw = await db_fetch_one(request=req, query=query)
+        elo = elo_raw['data']['elo_rank_new']
+        current_tier = {
+            "current_elo": int(elo),
+            "tier": "",
+            "tier_short": ""
+        }
+        for tier in tiers['data']:
+            if elo > tier['min_threshold'] and elo < tier['max_threshold']:
+                current_tier['tier'] = tier['tier_display_name']
+                current_tier['tier_short'] = tier['tier_short_name'] 
+    except:
+        return {"status": "FAIL", "data": {}}
+    return {"status": "OK", "data": current_tier}
 
 @app.get("/movelist")
 async def get_movelist(req: Request):
@@ -146,7 +182,7 @@ async def get_match(req: Request, id: int = -1):
     '''
     return await db_fetch_one(request=req, query=query)
 
-@app.get("/match/forfeits")
+@app.get("/match_forfeits")
 async def get_match_forfeits(req: Request):
     query = '''
         SELECT 
@@ -224,29 +260,40 @@ async def get_stage_stats(req: Request):
 
 @app.get("/match-stats")
 async def get_match_stats(req: Request):
-    query = ''' 
-        SELECT
-        game_count,
-        match_win,
-        COUNT(*) AS match_count
-        FROM (
-        SELECT
-            id,
-            match_win,
-            match_forfeit,
-            (
-            CASE WHEN game_1_winner = 1 THEN 1 ELSE 0 END +
-            CASE WHEN game_2_winner = 1 THEN 1 ELSE 0 END +
-            CASE WHEN game_3_winner = 1 THEN 1 ELSE 0 END
-            ) AS game_count
-        FROM matches
-        ) AS counted_matches
-        WHERE NOT (
-        (game_count = 0 AND match_win = 1 AND match_forfeit = 0)
-        OR (game_count = 0 AND match_win = 0)
-        )
-        GROUP BY game_count, match_win
-        ORDER BY game_count DESC, match_win DESC;
+    season_raw = await get_seasons(req=req)
+    season = season_raw['data'][-1]['display_name']
+    query = f''' 
+        SELECT 
+            game_count,
+            CASE WHEN match_win = 1 THEN 'WIN' ELSE 'LOSE' END AS match_win,
+            COUNT(*) AS match_count,
+            season_display_name
+        FROM
+            (SELECT 
+                id,
+                    match_win,
+                    match_forfeit,
+                    (CASE
+                        WHEN game_1_winner IN (1 , 2) THEN 1
+                        ELSE 0
+                    END + CASE
+                        WHEN game_2_winner IN (1 , 2) THEN 1
+                        ELSE 0
+                    END + CASE
+                        WHEN game_3_winner IN (1 , 2) THEN 1
+                        ELSE 0
+                    END) AS game_count,
+                    season_display_name
+            FROM
+                matches_vw) AS counted_matches
+        WHERE
+            NOT ((game_count = 0 AND match_win = 1
+                AND match_forfeit = 0)
+                OR (game_count = 0 AND match_win = 0))
+            AND season_display_name = "{season}"
+        GROUP BY season_display_name, game_count , match_win
+        ORDER BY game_count DESC , match_win DESC;
+
     '''
     return await db_fetch_all(request=req, query=query)
 
