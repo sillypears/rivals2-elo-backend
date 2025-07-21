@@ -15,7 +15,7 @@ from pydantic import TypeAdapter
 load_dotenv()
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> Any:
     pool = await aiomysql.create_pool(
         host=os.environ.get("DB_HOST"), 
         user=os.environ.get("DB_USER"),
@@ -61,20 +61,18 @@ app.add_middleware(
 websockets: List[WebSocket] = []
 
 @app.get("/favicon.ico", include_in_schema=False)
-async def favicon():
+async def favicon() -> FileResponse:
     return FileResponse('favicon.ico')
 
 @app.get("/characters")
-async def get_characters(req: Request):
+async def get_characters(req: Request) -> dict:
     query = '''
         SELECT * FROM characters
     '''
     return await db_fetch_all(request=req, query=query)
 
-
-
 @app.get("/stages")
-async def get_characters(req: Request):
+async def get_characters(req: Request) -> dict:
     query = '''
         SELECT * FROM stages
     '''
@@ -82,7 +80,7 @@ async def get_characters(req: Request):
 
 
 @app.get("/seasons")
-async def get_seasons(req: Request):
+async def get_seasons(req: Request) -> dict:
 
     query = f'''
         SELECT 
@@ -96,7 +94,7 @@ async def get_seasons(req: Request):
     return await db_fetch_all(request=req, query=query)
 
 @app.get("/ranked_tiers")
-async def get_ranked_tier_list(req: Request):
+async def get_ranked_tier_list(req: Request) -> dict:
 
     query = f'''
         SELECT 
@@ -106,7 +104,7 @@ async def get_ranked_tier_list(req: Request):
     return await db_fetch_all(request=req, query=query)
 
 @app.get("/current_tier")
-async def get_current_tier(req: Request):
+async def get_current_tier(req: Request) -> dict:
     try:
         tiers = await get_ranked_tier_list(req)
         query = f'''
@@ -133,7 +131,7 @@ async def get_current_tier(req: Request):
     return {"status": "OK", "data": current_tier}
 
 @app.get("/movelist")
-async def get_movelist(req: Request):
+async def get_movelist(req: Request) -> dict:
     query = '''
         SELECT * FROM moves
     '''
@@ -141,7 +139,7 @@ async def get_movelist(req: Request):
 
 @app.get("/matches")
 @app.get("/matches/{limit}")
-async def get_matches(req: Request, limit: int=None):
+async def get_matches(req: Request, limit: int=None) -> dict:
     try:
         if limit < 1: limit = 1
     except:
@@ -154,7 +152,7 @@ async def get_matches(req: Request, limit: int=None):
 
 
 @app.get("/matches/{offset}/{limit}")
-async def get_matches(req: Request, offset:int = 0, limit: int = 10):
+async def get_matches(req: Request, offset:int = 0, limit: int = 10) -> dict:
     if limit < 1: limit = 1
     if offset < 0: offset = 0
     query = f'''
@@ -166,7 +164,7 @@ async def get_matches(req: Request, offset:int = 0, limit: int = 10):
 
 @app.get("/match")
 @app.get("/match/{id}")
-async def get_match(req: Request, id: int = -1):
+async def get_match(req: Request, id: int = -1) -> dict:
     if id < 1:
         try:
             data = await get_latest_match_id(req)
@@ -183,7 +181,7 @@ async def get_match(req: Request, id: int = -1):
     return await db_fetch_one(request=req, query=query)
 
 @app.get("/match_forfeits")
-async def get_match_forfeits(req: Request):
+async def get_match_forfeits(req: Request) -> dict:
     query = '''
         SELECT 
             COUNT(match_win) AS forfeits
@@ -196,7 +194,7 @@ async def get_match_forfeits(req: Request):
     return await db_fetch_one(request=req, query=query)
 
 @app.get("/stats")
-async def get_stats(req: Request, limit: int = 10, skip: int = 0, match_win: bool = True):
+async def get_stats(req: Request, limit: int = 10, skip: int = 0, match_win: bool = True) -> dict:
     if limit < 1: limit = 10
     if skip < 0: skip = 0
     query = f'''
@@ -213,7 +211,7 @@ async def get_stats(req: Request, limit: int = 10, skip: int = 0, match_win: boo
             return sorted(rows, key=lambda x: x['ranked_game_number'])
         
 @app.get("/char-stats")
-async def get_char_stats(req: Request):
+async def get_char_stats(req: Request) -> dict:
     query = '''
         SELECT
             opponent_pick,
@@ -236,7 +234,7 @@ async def get_char_stats(req: Request):
 
 
 @app.get("/stage-stats")
-async def get_stage_stats(req: Request):
+async def get_stage_stats(req: Request) -> dict:
     query = '''
         SELECT
             stage_name,
@@ -259,7 +257,7 @@ async def get_stage_stats(req: Request):
 
 
 @app.get("/match-stats")
-async def get_match_stats(req: Request):
+async def get_match_stats(req: Request) -> dict:
     season_raw = await get_seasons(req=req)
     season = season_raw['data'][-1]['display_name']
     query = f''' 
@@ -299,7 +297,7 @@ async def get_match_stats(req: Request):
 
         
 @app.get("/match-stage-stats")
-async def get_match_stage_stats(req: Request):
+async def get_match_stage_stats(req: Request) -> dict:
     query = '''
         SELECT 
         s.id,
@@ -329,7 +327,7 @@ async def get_match_stage_stats(req: Request):
 
 @app.get("/elo-change")
 @app.get("/elo-change/{match_number}")
-async def get_elo_changes(req: Request, match_number:int = 10):
+async def get_elo_changes(req: Request, match_number:int = 10) -> dict:
     if match_number < 1: match_number = 1
     query = f'''
         SELECT
@@ -366,7 +364,7 @@ async def get_elo_changes(req: Request, match_number:int = 10):
 
 
 @app.get("/final-move-stats")
-async def get_final_move_stats(req: Request):
+async def get_final_move_stats(req: Request) -> dict:
     query = '''
         SELECT 
             final_move_short,
@@ -405,7 +403,7 @@ async def get_final_move_stats(req: Request):
     return await db_fetch_all(request=req, query=query)
 
 @app.get("/all-seasons-stats")
-async def get_all_seasons_stats(req: Request):
+async def get_all_seasons_stats(req: Request) -> dict:
     query = '''
         SELECT
         season_display_name,
@@ -421,8 +419,9 @@ async def get_all_seasons_stats(req: Request):
     '''
     return await db_fetch_all(request=req, query=query)
 
+# post
 @app.post("/insert-match")
-async def insert_match(match: Match, debug: bool = 0):
+async def insert_match(match: Match, debug: bool = 0) -> dict:
     query = '''
         INSERT INTO matches (
             match_date, elo_rank_old, elo_rank_new, elo_change, match_win, match_forfeit,
@@ -465,8 +464,9 @@ async def insert_match(match: Match, debug: bool = 0):
                 return {"status": "failed", "error": e.args}
     return {"status": "ok", "last_id": inserted_id}
 
+# patch
 @app.patch("/update-match/")
-async def update_match(update_value: dict):
+async def update_match(update_value: dict) -> dict:
     try:
         match_id = int(update_value['row_id'])
     except (ValueError, KeyError):
@@ -478,8 +478,20 @@ async def update_match(update_value: dict):
                 await cur.execute(f"""UPDATE matches SET {update_value['key']}="{update_value['value']}" WHERE id = {match_id}""")
                 rows = await cur.fetchall()
                 return {"status": "ok", "data": rows}
-    return 0
+    return {"status": "OK", "data": {}}
 
+# delete
+
+@app.delete("/match/{id}")
+async def delete_match(req: Request, id: int) -> dict:
+    if type(id) != int:
+        return {"status": "FAIL", "data": {"message": "Invalid match ID"}}
+    query = f'''
+        DELETE FROM matches WHERE id = {id} 
+    '''
+    return db_fetch_one(request=req, query=query)
+
+# websockets
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
