@@ -30,7 +30,6 @@ async def lifespan(app: FastAPI) -> Any:
         pool.close()
         await pool.wait_closed()
 
-
 async def db_fetch_all(request: Request, query: str, params: tuple = ()) -> Dict[str, Any]:
     async with request.app.state.db_pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
@@ -64,14 +63,14 @@ websockets: List[WebSocket] = []
 async def favicon() -> FileResponse:
     return FileResponse('favicon.ico')
 
-@app.get("/characters")
+@app.get("/characters", tags=["Characters", "Meta"])
 async def get_characters(req: Request) -> dict:
     query = '''
         SELECT * FROM characters
     '''
     return await db_fetch_all(request=req, query=query)
 
-@app.get("/stages")
+@app.get("/stages", tags=["Stages", "Meta"])
 async def get_characters(req: Request) -> dict:
     query = '''
         SELECT * FROM stages
@@ -79,7 +78,7 @@ async def get_characters(req: Request) -> dict:
     return await db_fetch_all(request=req, query=query)
 
 
-@app.get("/seasons")
+@app.get("/seasons", tags=["Seasons", "Meta"])
 async def get_seasons(req: Request) -> dict:
 
     query = f'''
@@ -93,7 +92,7 @@ async def get_seasons(req: Request) -> dict:
     '''
     return await db_fetch_all(request=req, query=query)
 
-@app.get("/ranked_tiers")
+@app.get("/ranked_tiers", tags=["Ranked", "Meta"])
 async def get_ranked_tier_list(req: Request) -> dict:
 
     query = f'''
@@ -103,7 +102,7 @@ async def get_ranked_tier_list(req: Request) -> dict:
     '''
     return await db_fetch_all(request=req, query=query)
 
-@app.get("/current_tier")
+@app.get("/current_tier", tags=["Performance"])
 async def get_current_tier(req: Request) -> dict:
     try:
         tiers = await get_ranked_tier_list(req)
@@ -130,15 +129,15 @@ async def get_current_tier(req: Request) -> dict:
         return {"status": "FAIL", "data": {}}
     return {"status": "OK", "data": current_tier}
 
-@app.get("/movelist")
+@app.get("/movelist", tags=["Moves", "Meta"])
 async def get_movelist(req: Request) -> dict:
     query = '''
         SELECT * FROM moves
     '''
     return await db_fetch_all(request=req, query=query)
 
-@app.get("/matches")
-@app.get("/matches/{limit}")
+@app.get("/matches", tags=["Matches"])
+@app.get("/matches/{limit}", tags=["Matches"])
 async def get_matches(req: Request, limit: int=None) -> dict:
     try:
         if limit < 1: limit = 1
@@ -151,7 +150,7 @@ async def get_matches(req: Request, limit: int=None) -> dict:
     return await db_fetch_all(request=req, query=query)
 
 
-@app.get("/matches/{offset}/{limit}")
+@app.get("/matches/{offset}/{limit}", tags=["Matches"])
 async def get_matches(req: Request, offset:int = 0, limit: int = 10) -> dict:
     if limit < 1: limit = 1
     if offset < 0: offset = 0
@@ -162,8 +161,8 @@ async def get_matches(req: Request, offset:int = 0, limit: int = 10) -> dict:
     '''
     return await db_fetch_all(request=req, query=query)
 
-@app.get("/match")
-@app.get("/match/{id}")
+@app.get("/match", tags=["Matches"])
+@app.get("/match/{id}", tags=["Matches"])
 async def get_match(req: Request, id: int = -1) -> dict:
     if id < 1:
         try:
@@ -180,7 +179,7 @@ async def get_match(req: Request, id: int = -1) -> dict:
     '''
     return await db_fetch_one(request=req, query=query)
 
-@app.get("/match_forfeits")
+@app.get("/match_forfeits", tags=["Matches"])
 async def get_match_forfeits(req: Request) -> dict:
     query = '''
         SELECT 
@@ -193,7 +192,7 @@ async def get_match_forfeits(req: Request) -> dict:
     '''
     return await db_fetch_one(request=req, query=query)
 
-@app.get("/stats")
+@app.get("/stats", tags=["Charts"])
 async def get_stats(req: Request, limit: int = 10, skip: int = 0, match_win: bool = True) -> dict:
     if limit < 1: limit = 10
     if skip < 0: skip = 0
@@ -208,9 +207,9 @@ async def get_stats(req: Request, limit: int = 10, skip: int = 0, match_win: boo
         async with conn.cursor(aiomysql.DictCursor) as cur:
             await cur.execute(query)
             rows = await cur.fetchall()
-            return sorted(rows, key=lambda x: x['ranked_game_number'])
+            return {"status": "OK", "data": sorted(rows, key=lambda x: x['ranked_game_number'])}
         
-@app.get("/char-stats")
+@app.get("/char-stats", tags=["Charts"])
 async def get_char_stats(req: Request) -> dict:
     query = '''
         SELECT
@@ -233,7 +232,7 @@ async def get_char_stats(req: Request) -> dict:
     return await db_fetch_all(request=req, query=query)
 
 
-@app.get("/stage-stats")
+@app.get("/stage-stats", tags=["Charts"])
 async def get_stage_stats(req: Request) -> dict:
     query = '''
         SELECT
@@ -256,7 +255,7 @@ async def get_stage_stats(req: Request) -> dict:
     return await db_fetch_all(request=req, query=query)
 
 
-@app.get("/match-stats")
+@app.get("/match-stats", tags=["Charts"])
 async def get_match_stats(req: Request) -> dict:
     season_raw = await get_seasons(req=req)
     season = season_raw['data'][-1]['display_name']
@@ -296,7 +295,7 @@ async def get_match_stats(req: Request) -> dict:
     return await db_fetch_all(request=req, query=query)
 
         
-@app.get("/match-stage-stats")
+@app.get("/match-stage-stats", tags=["Charts"])
 async def get_match_stage_stats(req: Request) -> dict:
     query = '''
         SELECT 
@@ -325,8 +324,8 @@ async def get_match_stage_stats(req: Request) -> dict:
     '''
     return await db_fetch_all(request=req, query=query)
 
-@app.get("/elo-change")
-@app.get("/elo-change/{match_number}")
+@app.get("/elo-change", tags=["Charts"])
+@app.get("/elo-change/{match_number}", tags=["Charts"])
 async def get_elo_changes(req: Request, match_number:int = 10) -> dict:
     if match_number < 1: match_number = 1
     query = f'''
@@ -363,7 +362,7 @@ async def get_elo_changes(req: Request, match_number:int = 10) -> dict:
     return await db_fetch_one(request=req, query=query)
 
 
-@app.get("/final-move-stats")
+@app.get("/final-move-stats", tags=["Charts"])
 async def get_final_move_stats(req: Request) -> dict:
     query = '''
         SELECT 
@@ -402,7 +401,7 @@ async def get_final_move_stats(req: Request) -> dict:
     '''
     return await db_fetch_all(request=req, query=query)
 
-@app.get("/all-seasons-stats")
+@app.get("/all-seasons-stats", tags=["Charts"])
 async def get_all_seasons_stats(req: Request) -> dict:
     query = '''
         SELECT
@@ -420,7 +419,7 @@ async def get_all_seasons_stats(req: Request) -> dict:
     return await db_fetch_all(request=req, query=query)
 
 # post
-@app.post("/insert-match")
+@app.post("/insert-match", tags=["Charts", "Mutable"])
 async def insert_match(match: Match, debug: bool = 0) -> dict:
     query = '''
         INSERT INTO matches (
@@ -465,7 +464,7 @@ async def insert_match(match: Match, debug: bool = 0) -> dict:
     return {"status": "ok", "last_id": inserted_id}
 
 # patch
-@app.patch("/update-match/")
+@app.patch("/update-match/", tags=["Charts", "Mutable"])
 async def update_match(update_value: dict) -> dict:
     try:
         match_id = int(update_value['row_id'])
@@ -482,7 +481,7 @@ async def update_match(update_value: dict) -> dict:
 
 # delete
 
-@app.delete("/match/{id}")
+@app.delete("/match/{id}", tags=["Matches", "Mutable"])
 async def delete_match(req: Request, id: int) -> dict:
     if type(id) != int:
         return {"status": "FAIL", "data": {"message": "Invalid match ID"}}
