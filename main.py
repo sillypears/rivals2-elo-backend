@@ -421,6 +421,7 @@ async def get_all_seasons_stats(req: Request) -> dict:
 # post
 @app.post("/insert-match", tags=["Charts", "Mutable"])
 async def insert_match(match: Match, debug: bool = 0) -> dict:
+    print(match)
     query = '''
         INSERT INTO matches (
             match_date, elo_rank_old, elo_rank_new, elo_change, match_win, match_forfeit,
