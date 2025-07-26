@@ -108,7 +108,10 @@ async def get_current_tier(req: Request) -> dict:
         tiers = await get_ranked_tier_list(req)
         query = f'''
             SELECT
-                elo_rank_new
+                elo_rank_new,
+                ranked_game_number,
+                win_streak_value,
+                total_wins
             FROM
                 matches_vw
             ORDER BY id DESC
@@ -116,10 +119,14 @@ async def get_current_tier(req: Request) -> dict:
         '''
         elo_raw = await db_fetch_one(request=req, query=query)
         elo = elo_raw['data']['elo_rank_new']
+        game_no = elo_raw['data']['ranked_game_number']
         current_tier = {
             "current_elo": int(elo),
             "tier": "",
-            "tier_short": ""
+            "tier_short": "",
+            "last_game_number": int(game_no),
+            "win_streak_value": int(elo_raw['data']['win_streak_value']),
+            "total_wins": int(elo_raw['data']['total_wins'])
         }
         for tier in tiers['data']:
             if elo > tier['min_threshold'] and elo < tier['max_threshold']:
