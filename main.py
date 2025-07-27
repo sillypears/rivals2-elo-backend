@@ -471,8 +471,35 @@ async def insert_match(match: Match, debug: bool = 0) -> dict:
                 return {"status": "failed", "error": e.args}
     return {"status": "ok", "last_id": inserted_id}
 
+@app.get("/elo-by-season", tags=["Charts"])
+async def get_elo_by_season(req: Request) -> dict:
+    query = '''
+    SELECT 
+        MIN(m.elo_rank_old) AS min_elo,
+        CAST(ROUND(AVG(m.elo_rank_new)) AS INTEGER) AS avg_elo,
+        CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(GROUP_CONCAT(elo_rank_new
+                            ORDER BY elo_rank_new
+                            SEPARATOR ','),
+                        ',',
+                        FLOOR(COUNT(*) / 2) + 1),
+                ',',
+                - 1) AS INTEGER) AS median_elo,
+        MAX(m.elo_rank_new) AS max_elo,
+        (MAX(m.elo_rank_new) - MIN(m.elo_rank_old)) AS elo_gain,
+        COUNT(*) AS match_count,
+        s.display_name
+    FROM
+        matches_vw m
+            JOIN
+        seasons s ON m.season_id = s.id
+    WHERE
+        m.season_id IS NOT NULL
+    GROUP BY s.id , s.display_name
+    '''
+    return await db_fetch_all(request=req, query=query)
+
 # patch
-@app.patch("/update-match/", tags=["Charts", "Mutable"])
+@app.patch("/update-match/", tags=["Mutable"])
 async def update_match(update_value: dict) -> dict:
     try:
         match_id = int(update_value['row_id'])
