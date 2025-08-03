@@ -12,6 +12,7 @@ import json
 from typing import Any, List, Dict
 from pydantic import TypeAdapter, BaseModel, Field
 import utils.errors as err
+from datetime import datetime
 
 load_dotenv()
 ALLOWED_UPDATE_COLUMNS = {
@@ -131,6 +132,13 @@ async def get_seasons(req: Request) -> dict:
     '''
     return await db_fetch_all(request=req, query=query)
 
+@app.get("/season/latest", tags=["Seasons", "Meta"])
+async def get_latest_season(req: Request):
+    query = '''
+        SELECT id FROM seasons WHERE '%s' BETWEEN start_date AND end_date
+    ''' % (datetime.now().isoformat())
+    print(query)
+    return await db_fetch_one(request=req, query=query)
 
 @app.get("/ranked_tiers", tags=["Ranked", "Meta"])
 async def get_ranked_tier_list(req: Request) -> dict:
@@ -253,7 +261,22 @@ async def get_match(req: Request, id: int = -1) -> dict:
     '''
     return await db_fetch_one(request=req, query=query)
 
-
+@app.get("/match-exists", tags=["Matches"])
+async def get_match_exists(req: Request, match_number: int = 0):
+    season = ""
+    if match_number < 1:
+        return err.ErrorResponse(message="Not Found", error_code=204)
+    if season == "":
+        s = await get_latest_season(req)
+        if s['status'] == "OK":
+            season = s['data']['id']
+        else:
+            season = -1
+    query = '''
+        SELECT m.id FROM matches_vw m LEFT JOIN seasons s ON m.season_id = s.id WHERE ranked_game_number = %s AND m.season_id = '%s'
+    ''' % (match_number, season)
+    return await db_fetch_one(request=req, query=query)
+    
 @app.get("/match_forfeits", tags=["Matches"])
 async def get_match_forfeits(req: Request) -> dict:
     query = '''
