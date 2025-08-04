@@ -130,7 +130,7 @@ async def get_seasons(req: Request) -> dict:
             display_name 
         FROM seasons
     '''
-    return await db_fetch_all(request=req, query=query)
+    return await err.safe_db_fetch_all(request=req, query=query)
 
 @app.get("/season/latest", tags=["Seasons", "Meta"])
 async def get_latest_season(req: Request):
@@ -147,7 +147,7 @@ async def get_ranked_tier_list(req: Request) -> dict:
             *
         FROM tiers
     '''
-    return await db_fetch_all(request=req, query=query)
+    return await err.safe_db_fetch_all(request=req, query=query)
 
 
 @app.get("/opponent_names", tags=["Ranked", "Meta"])
@@ -162,11 +162,11 @@ async def get_opponent_name_list(req: Request):
                 opponent_name <> ''
             ORDER BY opponent_name ASC    
         '''
-        opponent_list = await db_fetch_all(request=req, query=query)
+        opponent_list = await err.safe_db_fetch_all(request=req, query=query)
 
         return err.SuccessResponse(data=[x['opponent_name'] for x in opponent_list['data']])
     except Exception as e:
-        return err.ErrorResponse(data=[], message=f"Could not get opponent_list: {e}")
+        return err.ErrorResponse(message=f"Could not get opponent_list: {e}")
 
 
 @app.get("/current_tier", tags=["Performance"])
@@ -184,11 +184,11 @@ async def get_current_tier(req: Request) -> dict:
             ORDER BY id DESC
             LIMIT 1
         '''
-        elo_raw = await db_fetch_one(request=req, query=query)
-        elo = elo_raw['data']['elo_rank_new']
+        elo_raw = await err.safe_db_fetch_one(request=req, query=query)
+        elo = int(elo_raw['data']['elo_rank_new'])
         game_no = elo_raw['data']['ranked_game_number']
         current_tier = {
-            "current_elo": int(elo),
+            "current_elo": elo,
             "tier": "",
             "tier_short": "",
             "last_game_number": int(game_no),
@@ -196,12 +196,14 @@ async def get_current_tier(req: Request) -> dict:
             "total_wins": int(elo_raw['data']['total_wins'])
         }
         for tier in tiers['data']:
-            if elo > tier['min_threshold'] and elo < tier['max_threshold']:
+            if elo > int(tier['min_threshold']) and elo < int(tier['max_threshold']):
                 current_tier['tier'] = tier['tier_display_name']
                 current_tier['tier_short'] = tier['tier_short_name']
-    except:
-        return err.ErrorResponse(data={})
-    return err.SuccessResponse(data=current_tier)
+        return err.SuccessResponse(data=current_tier).model_dump()
+
+    except Exception as e:
+        print(f"eeee: {e}")
+        return err.ErrorResponse(message=e)
 
 
 @app.get("/movelist", tags=["Moves", "Meta"])
@@ -209,7 +211,7 @@ async def get_movelist(req: Request) -> dict:
     query = '''
         SELECT * FROM moves
     '''
-    return await db_fetch_all(request=req, query=query)
+    return await err.safe_db_fetch_all(request=req, query=query)
 
 
 @app.get("/matches", tags=["Matches"])
@@ -224,7 +226,7 @@ async def get_matches(req: Request, limit: int = None) -> dict:
         SELECT * FROM matches_vw 
         {"LIMIT" if int(limit) else ''} {int(limit) if int(limit) else ''}
     '''
-    return await db_fetch_all(request=req, query=query)
+    return await err.safe_db_fetch_all(request=req, query=query)
 
 
 @app.get("/matches/{offset}/{limit}", tags=["Matches"])
@@ -238,7 +240,7 @@ async def get_matches(req: Request, offset: int = 0, limit: int = 10) -> dict:
         LIMIT {limit} 
         OFFSET {offset}
     '''
-    return await db_fetch_all(request=req, query=query)
+    return await err.safe_db_fetch_all(request=req, query=query)
 
 
 @app.get("/match", tags=["Matches"])
@@ -257,7 +259,7 @@ async def get_match(req: Request, id: int = -1) -> dict:
             matches_vw
         WHERE id = {int(id)}
     '''
-    return await db_fetch_one(request=req, query=query)
+    return await err.safe_db_fetch_one(request=req, query=query)
 
 @app.get("/match-exists", tags=["Matches"])
 async def get_match_exists(req: Request, match_number: int = 0):
@@ -287,7 +289,7 @@ async def get_match_forfeits(req: Request) -> dict:
             match_forfeit = 1
             AND match_win = 1
     '''
-    return await db_fetch_one(request=req, query=query)
+    return await err.safe_db_fetch_one(request=req, query=query)
 
 
 @app.get("/stats", tags=["Charts"])
@@ -330,7 +332,7 @@ async def get_char_stats(req: Request) -> dict:
         GROUP BY opponent_pick
         ORDER BY win_percentage DESC, total_games DESC;
             '''
-    return await db_fetch_all(request=req, query=query)
+    return await err.safe_db_fetch_all(request=req, query=query)
 
 
 @app.get("/stage-stats", tags=["Charts"])
@@ -353,7 +355,7 @@ async def get_stage_stats(req: Request) -> dict:
         GROUP BY stage_name
         ORDER BY win_percentage DESC, total_games DESC;
             '''
-    return await db_fetch_all(request=req, query=query)
+    return await err.safe_db_fetch_all(request=req, query=query)
 
 
 @app.get("/match-stats", tags=["Charts"])
@@ -393,7 +395,7 @@ async def get_match_stats(req: Request) -> dict:
         ORDER BY game_count DESC , match_win DESC;
 
     '''
-    return await db_fetch_all(request=req, query=query)
+    return await err.safe_db_fetch_all(request=req, query=query)
 
 
 @app.get("/match-stage-stats", tags=["Charts"])
@@ -423,7 +425,7 @@ async def get_match_stage_stats(req: Request) -> dict:
         ORDER BY times_picked DESC, s.display_name, pick_type;
 
     '''
-    return await db_fetch_all(request=req, query=query)
+    return await err.safe_db_fetch_all(request=req, query=query)
 
 
 @app.get("/elo-change", tags=["Charts"])
@@ -462,7 +464,7 @@ async def get_elo_changes(req: Request, match_number: int = 10) -> dict:
         ) AS stats;
 
     '''
-    return await db_fetch_one(request=req, query=query)
+    return await err.safe_db_fetch_one(request=req, query=query)
 
 
 @app.get("/final-move-stats", tags=["Charts"])
@@ -502,7 +504,7 @@ async def get_final_move_stats(req: Request) -> dict:
         GROUP BY final_move_name
         ORDER BY final_move_count DESC;
     '''
-    return await db_fetch_all(request=req, query=query)
+    return await err.safe_db_fetch_all(request=req, query=query)
 
 
 @app.get("/all-seasons-stats", tags=["Charts"])
@@ -520,7 +522,7 @@ async def get_all_seasons_stats(req: Request) -> dict:
         ORDER BY season_id DESC;
 
     '''
-    return await db_fetch_all(request=req, query=query)
+    return await err.safe_db_fetch_all(request=req, query=query)
 
 # post
 
@@ -568,7 +570,7 @@ async def insert_match(match: Match, debug: bool = 0) -> dict:
 
             except Exception as e:
                 return err.ErrorResponse(message=e.args)
-    return {"status": "SUCCESS", "last_id": inserted_id}
+    return err.SuccessResponse(data={"last_id": inserted_id})
 
 
 @app.get("/elo-by-season", tags=["Charts"])
@@ -596,7 +598,7 @@ async def get_elo_by_season(req: Request) -> dict:
         m.season_id IS NOT NULL
     GROUP BY s.id , s.display_name
     '''
-    return await db_fetch_all(request=req, query=query)
+    return await err.safe_db_fetch_all(request=req, query=query)
 
 # patch
 
@@ -627,7 +629,7 @@ async def delete_match(req: Request, id: int) -> dict:
     query = f'''
         DELETE FROM matches WHERE id = {id} 
     '''
-    return db_fetch_one(request=req, query=query)
+    return err.safe_db_fetch_one(request=req, query=query)
 
 # websockets
 
@@ -671,4 +673,4 @@ async def get_latest_match_id(req: Request):
         FROM
             matches_vw
     '''
-    return await db_fetch_one(request=req, query=query)
+    return await err.safe_db_fetch_one(request=req, query=query)
