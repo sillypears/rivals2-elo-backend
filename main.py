@@ -58,7 +58,7 @@ async def db_fetch_all(request: Request, query: str, params: tuple = ()) -> Dict
             rows = await cur.fetchall()
             if rows is None:
                 return {"status": "FAIL", "data": []}
-            return {"status": "OK", "data": rows}
+            return err.SuccessResponse(data=rows)
 
 
 async def db_fetch_one(request: Request, query: str, params: tuple = ()) -> Dict[str, Any]:
@@ -67,8 +67,8 @@ async def db_fetch_one(request: Request, query: str, params: tuple = ()) -> Dict
             await cur.execute(query, params)
             rows = await cur.fetchone()
             if rows is None:
-                return {"status": "FAIL", "data": []}
-            return {"status": "OK", "data": rows}
+                return err.ErrorResponse(data=[])
+            return err.SuccessResponse(data=rows)
 
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(
@@ -137,8 +137,7 @@ async def get_latest_season(req: Request):
     query = '''
         SELECT id FROM seasons WHERE '%s' BETWEEN start_date AND end_date
     ''' % (datetime.now().isoformat())
-    print(query)
-    return await db_fetch_one(request=req, query=query)
+    return await err.safe_db_fetch_one(request=req, query=query)
 
 @app.get("/ranked_tiers", tags=["Ranked", "Meta"])
 async def get_ranked_tier_list(req: Request) -> dict:
@@ -165,10 +164,9 @@ async def get_opponent_name_list(req: Request):
         '''
         opponent_list = await db_fetch_all(request=req, query=query)
 
-        return {"status": "OK", "data": [x['opponent_name'] for x in opponent_list['data']]}
+        return err.SuccessResponse(data=[x['opponent_name'] for x in opponent_list['data']])
     except Exception as e:
-        return {"status": "FAIL", "data": "Could not get opponent_list", "msg": e}
-    return {"status": "FAIL", "data": "Catastrophic failure"}
+        return err.ErrorResponse(data=[], message=f"Could not get opponent_list: {e}")
 
 
 @app.get("/current_tier", tags=["Performance"])
@@ -202,8 +200,8 @@ async def get_current_tier(req: Request) -> dict:
                 current_tier['tier'] = tier['tier_display_name']
                 current_tier['tier_short'] = tier['tier_short_name']
     except:
-        return {"status": "FAIL", "data": {}}
-    return {"status": "OK", "data": current_tier}
+        return err.ErrorResponse(data={})
+    return err.SuccessResponse(data=current_tier)
 
 
 @app.get("/movelist", tags=["Moves", "Meta"])
@@ -268,14 +266,15 @@ async def get_match_exists(req: Request, match_number: int = 0):
         return err.ErrorResponse(message="Not Found", error_code=204)
     if season == "":
         s = await get_latest_season(req)
-        if s['status'] == "OK":
+        if s['status'] == "SUCCESS":
             season = s['data']['id']
         else:
             season = -1
     query = '''
         SELECT m.id FROM matches_vw m LEFT JOIN seasons s ON m.season_id = s.id WHERE ranked_game_number = %s AND m.season_id = '%s'
     ''' % (match_number, season)
-    return await db_fetch_one(request=req, query=query)
+    print(query)
+    return await err.safe_db_fetch_one(request=req, query=query)
     
 @app.get("/match_forfeits", tags=["Matches"])
 async def get_match_forfeits(req: Request) -> dict:
@@ -308,7 +307,7 @@ async def get_stats(req: Request, limit: int = 10, skip: int = 0, match_win: boo
         async with conn.cursor(aiomysql.DictCursor) as cur:
             await cur.execute(query)
             rows = await cur.fetchall()
-            return {"status": "OK", "data": sorted(rows, key=lambda x: x['ranked_game_number'])}
+            return {"status": "SUCCESS", "data": sorted(rows, key=lambda x: x['ranked_game_number'])}
 
 
 @app.get("/char-stats", tags=["Charts"])
@@ -568,8 +567,8 @@ async def insert_match(match: Match, debug: bool = 0) -> dict:
                 inserted_id = cur.lastrowid
 
             except Exception as e:
-                return {"status": "failed", "error": e.args}
-    return {"status": "ok", "last_id": inserted_id}
+                return err.ErrorResponse(message=e.args)
+    return {"status": "SUCCESS", "last_id": inserted_id}
 
 
 @app.get("/elo-by-season", tags=["Charts"])
@@ -615,8 +614,8 @@ async def update_match(update_value: dict) -> dict:
             async with conn.cursor(aiomysql.DictCursor) as cur:
                 await cur.execute(f"""UPDATE matches SET {update_value['key']}="{update_value['value']}" WHERE id = {match_id}""")
                 rows = await cur.fetchall()
-                return {"status": "ok", "data": rows}
-    return {"status": "OK", "data": {}}
+                return err.SuccessResponse(data=rows)
+    return err.SuccessResponse(data={})
 
 # delete
 
