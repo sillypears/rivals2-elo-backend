@@ -628,8 +628,9 @@ async def get_head_to_head_by_user(req: Request, opp_name: str = ""):
     query = '''
         SELECT 
             id,
+            ranked_game_number,
             match_date,
-            CASE WHEN match_win = 1 THEN 'WIN' ELSE 'LOSS' END as result,
+            match_win,
             elo_rank_old,
             elo_rank_new,
             elo_change,
