@@ -418,7 +418,7 @@ async def get_match_stage_stats(req: Request) -> dict:
         ) m
         JOIN stages s ON m.stage_id = s.id
         WHERE 
-        (m.stage_num = 1 AND s.id != -1) -- only apply filter to game 1 rows
+        (m.stage_num = 1 AND s.id != -1) 
         OR (m.stage_num IN (2,3) AND s.counter_pick = 1)
         AND s.id != -1
         GROUP BY s.id, s.display_name, pick_type
@@ -600,6 +600,176 @@ async def get_elo_by_season(req: Request) -> dict:
     '''
     return await err.safe_db_fetch_all(request=req, query=query)
 
+@app.get("/head-to-head", tags=["Charts", "Matches"])
+async def get_head_to_head_by_user(req: Request, opp_name: str = ""):
+    if opp_name == "": return err.ErrorResponse(message="No user was given")
+    all_data = {}
+    query = '''
+    SELECT 
+        COUNT(*) as total_matches,
+        SUM(match_win) as matches_won,
+        COUNT(*) - SUM(match_win) as matches_lost,
+        ROUND(CAST(SUM(match_win) AS DECIMAL) / COUNT(*) * 100, 1) as win_percentage,
+        ROUND(AVG(ABS(elo_change))) as avg_elo_change,
+        MIN(elo_rank_old) as my_lowest_elo,
+        MAX(elo_rank_new) as my_highest_elo,
+        MIN(opponent_elo) as opp_lowest_elo,
+        MAX(opponent_elo) as opp_hightest_elo,
+        COUNT(CASE WHEN match_forfeit = 1 THEN 1 END) as forfeits
+    FROM matches_vw
+    WHERE LOWER(opponent_name) = LOWER('%s');
+    ''' % (opp_name)
+    temp = await err.safe_db_fetch_one(request=req, query=query)
+    if temp['status'] == "SUCCESS":
+        all_data['overall'] = temp['data']
+    else:
+        return err.ErrorResponse(message="Something went wrong with the overall request").model_dump()
+
+    query = '''
+        SELECT 
+            id,
+            match_date,
+            CASE WHEN match_win = 1 THEN 'WIN' ELSE 'LOSS' END as result,
+            elo_rank_old,
+            elo_rank_new,
+            elo_change,
+            opponent_elo,
+            match_forfeit,
+            season_display_name,
+            game_1_char_pick_name,
+            game_1_opponent_pick_name,
+            game_1_stage_name,
+            game_1_winner,
+            game_1_final_move_name,
+            game_2_char_pick_name,
+            game_2_opponent_pick_name,
+            game_2_stage_name,
+            game_2_winner,
+            game_2_final_move_name,
+            game_3_char_pick_name,
+            game_3_opponent_pick_name,
+            game_3_stage_name,
+            game_3_winner,
+            game_3_final_move_name,
+            (CASE WHEN game_1_winner = 1 THEN 1 ELSE 0 END +
+            CASE WHEN game_2_winner = 1 THEN 1 ELSE 0 END +
+            CASE WHEN game_3_winner = 1 THEN 1 ELSE 0 END) as games_won,
+            (CASE WHEN game_1_winner = 0 THEN 1 ELSE 0 END +
+            CASE WHEN game_2_winner = 0 THEN 1 ELSE 0 END +
+            CASE WHEN game_3_winner = 0 THEN 1 ELSE 0 END) as games_lost
+        FROM matches_vw
+        WHERE LOWER(opponent_name) = LOWER('%s')
+        ORDER BY match_date DESC;
+    ''' % (opp_name)
+
+    temp = await err.safe_db_fetch_all(request=req, query=query)
+    if temp['status'] == "SUCCESS":
+        all_data['matches'] = temp['data']
+    else:
+        return err.ErrorResponse(message="Something went wrong with the matches request").model_dump()
+    query = '''
+        SELECT 
+            stage_name,
+            games_played,
+            games_won,
+            ROUND(CAST(games_won AS DECIMAL) / games_played * 100, 1) as win_rate
+        FROM (
+            SELECT 
+                game_1_stage_name as stage_name,
+                COUNT(*) as games_played,
+                SUM(CASE WHEN game_1_winner = 1 THEN 1 ELSE 0 END) as games_won
+            FROM matches_vw 
+            WHERE LOWER(opponent_name) = LOWER('%(opponent)s') AND game_1_stage_name != 'N/A'
+            GROUP BY game_1_stage_name
+            
+            UNION ALL
+            
+            SELECT 
+                game_2_stage_name,
+                COUNT(*),
+                SUM(CASE WHEN game_2_winner = 1 THEN 1 ELSE 0 END)
+            FROM matches_vw 
+            WHERE LOWER(opponent_name) = LOWER('%(opponent)s') AND game_2_stage_name != 'N/A'
+            GROUP BY game_2_stage_name
+            
+            UNION ALL
+            
+            SELECT 
+                game_3_stage_name,
+                COUNT(*),
+                SUM(CASE WHEN game_3_winner = 1 THEN 1 ELSE 0 END)
+            FROM matches_vw 
+            WHERE LOWER(opponent_name) = LOWER('%(opponent)s') AND game_3_stage_name != 'N/A'
+            GROUP BY game_3_stage_name
+        ) stage_stats
+        GROUP BY stage_name
+        ORDER BY games_played DESC, win_rate DESC;
+        
+    ''' % {'opponent': opp_name}
+    temp = await err.safe_db_fetch_all(request=req, query=query)
+    if temp['status'] == "SUCCESS":
+        all_data['stages'] = temp['data']
+    else:
+        return err.ErrorResponse(message="Something went wrong with the stages request").model_dump()
+
+    query = '''
+        SELECT 
+            your_character,
+            opponent_character,
+            SUM(games_played) as games_played,
+            SUM(games_won) as games_won,
+            ROUND(CAST(SUM(games_won) AS DECIMAL) / SUM(games_played) * 100, 1) as win_rate
+        FROM (
+            SELECT 
+                game_1_char_pick_name as your_character,
+                game_1_opponent_pick_name as opponent_character,
+                COUNT(*) as games_played,
+                SUM(CASE WHEN game_1_winner = 1 THEN 1 ELSE 0 END) as games_won
+            FROM matches_vw 
+            WHERE LOWER(opponent_name) = LOWER('%(opponent)s')
+            AND game_1_char_pick_name != 'N/A'
+            AND game_1_opponent_pick_name != 'N/A'
+            GROUP BY game_1_char_pick_name, game_1_opponent_pick_name
+            
+            UNION ALL
+            
+            SELECT 
+                game_2_char_pick_name,
+                game_2_opponent_pick_name,
+                COUNT(*),
+                SUM(CASE WHEN game_2_winner = 1 THEN 1 ELSE 0 END)
+            FROM matches_vw 
+            WHERE LOWER(opponent_name) = LOWER('%(opponent)s')
+            AND game_2_char_pick_name != 'N/A'
+            AND game_2_opponent_pick_name != 'N/A'
+            GROUP BY game_2_char_pick_name, game_2_opponent_pick_name
+            
+            UNION ALL
+            
+            SELECT 
+                game_3_char_pick_name,
+                game_3_opponent_pick_name,
+                COUNT(*),
+                SUM(CASE WHEN game_3_winner = 1 THEN 1 ELSE 0 END)
+            FROM matches_vw 
+            WHERE LOWER(opponent_name) = LOWER('%(opponent)s')
+            AND game_3_char_pick_name != 'N/A'
+            AND game_3_opponent_pick_name != 'N/A'
+            GROUP BY game_3_char_pick_name, game_3_opponent_pick_name
+        ) matchup_stats
+        GROUP BY your_character, opponent_character
+        HAVING games_played > 0
+        ORDER BY games_played DESC, win_rate DESC;
+    ''' % {'opponent': opp_name}
+    temp = await err.safe_db_fetch_all(request=req, query=query)
+    if temp['status'] == "SUCCESS":
+        all_data['matchup'] = temp['data']
+    else:
+        return err.ErrorResponse(message="Something went wrong with the matchup request").model_dump()
+
+    if all_data:
+        return err.SuccessResponse(data=all_data).model_dump()
+    return err.ErrorResponse(message="Something went wrong").model_dump()
 # patch
 
 
@@ -616,8 +786,8 @@ async def update_match(update_value: dict) -> dict:
             async with conn.cursor(aiomysql.DictCursor) as cur:
                 await cur.execute(f"""UPDATE matches SET {update_value['key']}="{update_value['value']}" WHERE id = {match_id}""")
                 rows = await cur.fetchall()
-                return err.SuccessResponse(data=rows)
-    return err.SuccessResponse(data={})
+                return err.SuccessResponse(data=rows, message="hi").model_dump()
+    return err.SuccessResponse(data={}).model_dump()
 
 # delete
 
