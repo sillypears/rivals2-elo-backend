@@ -213,6 +213,43 @@ async def get_movelist(req: Request) -> dict:
     '''
     return await err.safe_db_fetch_all(request=req, query=query)
 
+@app.get("/movelist/top", tags=["Moves", "Meta"])
+async def get_movelist(req: Request) -> dict:
+    query = '''
+        SELECT
+            final_move_id,
+            final_move_name,
+            COUNT(*) AS usage_count
+        FROM (
+            SELECT
+                game_1_final_move_id AS final_move_id,
+                game_1_final_move_name AS final_move_name
+            FROM matches_vw
+            WHERE game_1_final_move_id != -1 AND LOWER(game_1_final_move_name) != 'n/a'
+
+            UNION ALL
+
+            SELECT
+                game_2_final_move_id,
+                game_2_final_move_name
+            FROM matches_vw
+            WHERE game_2_final_move_id != -1 AND LOWER(game_2_final_move_name) != 'n/a'
+
+            UNION ALL
+
+            SELECT
+                game_3_final_move_id,
+                game_3_final_move_name
+            FROM matches_vw
+            WHERE game_3_final_move_id != -1 AND LOWER(game_3_final_move_name) != 'n/a'
+        ) AS all_moves
+        GROUP BY
+            final_move_id, final_move_name
+        ORDER BY
+            usage_count DESC
+        LIMIT 5;
+    '''
+    return await err.safe_db_fetch_all(request=req, query=query)
 
 @app.get("/matches", tags=["Matches"])
 @app.get("/matches/{limit}", tags=["Matches"])
@@ -639,16 +676,19 @@ async def get_head_to_head_by_user(req: Request, opp_name: str = ""):
             season_display_name,
             game_1_char_pick_name,
             game_1_opponent_pick_name,
+            game_1_opponent_pick_image,
             game_1_stage_name,
             game_1_winner,
             game_1_final_move_name,
             game_2_char_pick_name,
             game_2_opponent_pick_name,
+            game_2_opponent_pick_image,
             game_2_stage_name,
             game_2_winner,
             game_2_final_move_name,
             game_3_char_pick_name,
             game_3_opponent_pick_name,
+            game_3_opponent_pick_image,
             game_3_stage_name,
             game_3_winner,
             game_3_final_move_name,
@@ -660,7 +700,8 @@ async def get_head_to_head_by_user(req: Request, opp_name: str = ""):
             CASE WHEN game_3_winner = 0 THEN 1 ELSE 0 END) as games_lost
         FROM matches_vw
         WHERE LOWER(opponent_name) = LOWER('%s')
-        ORDER BY match_date DESC;
+        ORDER BY match_date DESC
+        LIMIT 5;
     ''' % (opp_name)
 
     temp = await err.safe_db_fetch_all(request=req, query=query)
