@@ -354,10 +354,10 @@ async def get_char_stats(req: Request) -> dict:
     query = '''
         SELECT
             opponent_pick,
-            SUM(CASE WHEN game_winner = 1 THEN 1 ELSE 0 END) AS wins,
-            SUM(CASE WHEN game_winner = 2 THEN 1 ELSE 0 END) AS losses,
+            CAST(SUM(CASE WHEN game_winner = 1 THEN 1 ELSE 0 END) AS INTEGER) AS wins,
+            CAST(SUM(CASE WHEN game_winner = 2 THEN 1 ELSE 0 END) AS INTEGER) AS losses,
             COUNT(*) AS total_games,
-            ROUND(SUM(CASE WHEN game_winner = 1 THEN 1 ELSE 0 END) / COUNT(*) * 100, 2) AS win_percentage
+            CAST(ROUND(SUM(CASE WHEN game_winner = 1 THEN 1 ELSE 0 END) / COUNT(*) * 100, 2) AS FLOAT) AS win_percentage
         FROM (
             SELECT game_1_opponent_pick_name AS opponent_pick, game_1_winner AS game_winner FROM rivals2.matches_vw
             UNION ALL
@@ -783,7 +783,7 @@ async def get_top_matchups_by_name(req: Request):
 # post
 
 
-@app.post("/insert-match", tags=["Charts", "Mutable"])
+@app.post("/insert-match", tags=["Matches", "Mutable"])
 async def insert_match(match: Match, debug: bool = 0) -> dict:
     print(match)
     query = '''
