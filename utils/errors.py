@@ -119,7 +119,6 @@ async def safe_db_fetch_all(request: Request, query: str, params: tuple = ()) ->
 
 async def safe_db_fetch_one(request: Request, query: str, params: tuple = ()) -> Dict[str, Any]:
     """Safe database fetch one with proper error handling"""
-    print(query)
     try:
         async with request.app.state.db_pool.acquire() as conn:
             async with conn.cursor(aiomysql.DictCursor) as cur:

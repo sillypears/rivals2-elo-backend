@@ -154,17 +154,24 @@ async def get_ranked_tier_list(req: Request) -> dict:
 async def get_opponent_name_list(req: Request):
     try:
         query = f'''
-            SELECT DISTINCT
-                (opponent_name)
+            SELECT 
+                DISTINCT(opponent_name),
+                COUNT(opponent_name) as count
             FROM
                 matches_vw
             WHERE
                 opponent_name <> ''
-            ORDER BY opponent_name ASC    
+            GROUP BY opponent_name
+            ORDER BY opponent_name ASC
+  
         '''
         opponent_list = await err.safe_db_fetch_all(request=req, query=query)
 
-        return err.SuccessResponse(data=[x['opponent_name'] for x in opponent_list['data']])
+        data = {
+            'names': [x['opponent_name'] for x in opponent_list['data']],
+            'counts': {x['opponent_name']: x['count'] for x in opponent_list['data']}
+        }
+        return err.SuccessResponse(data=data)
     except Exception as e:
         return err.ErrorResponse(message=f"Could not get opponent_list: {e}")
 
@@ -816,17 +823,18 @@ async def insert_match(match: Match, debug: bool = 0) -> dict:
                     match.game_3_char_pick, match.game_3_opponent_pick, match.game_3_stage, match.game_3_winner, match.game_3_final_move_id,
                     match.final_move_id
                 ))
-                await notify_websockets({'type': 'new_match', 'ranked_game_number': int(match.ranked_game_number)})
+                await notify_websockets({'user': 'backend', 'type': 'new_match', 'ranked_game_number': int(match.ranked_game_number)})
+                print(f"Sending: {'user': 'backend', 'type': 'new_match', 'ranked_game_number': int(match.ranked_game_number)}" )
                 if match.match_win == 1:
-                    await notify_websockets({'type': 'new_win_stats', 'ranked_game_number': int(match.ranked_game_number)})
+                    await notify_websockets({'user': 'backend', 'type': 'new_win_stats', 'ranked_game_number': int(match.ranked_game_number)})
                 elif match.match_win == 0:
-                    await notify_websockets({'type': 'new_lose_stats', 'ranked_game_number': int(match.ranked_game_number)})
+                    await notify_websockets({'user': 'backend', 'type': 'new_lose_stats', 'ranked_game_number': int(match.ranked_game_number)})
 
                 inserted_id = cur.lastrowid
 
             except Exception as e:
-                return err.ErrorResponse(message=e.args)
-    return err.SuccessResponse(data={"last_id": inserted_id})
+                return err.ErrorResponse(message=e.args).model_dump()
+    return err.SuccessResponse(data={"last_id": inserted_id}).model_dump()
 
 # patch
 
@@ -861,27 +869,47 @@ async def delete_match(req: Request, id: int) -> dict:
 
 # websockets
 
-
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     websockets.append(websocket)
+    print(f"New connection: {websocket}")
+
+    last_pong = asyncio.get_event_loop().time()  
+    PING_INTERVAL = 5
+    PONG_TIMEOUT = 5   
     try:
         while True:
             try:
-                nmessage = await asyncio.wait_for(websocket.receive_text(), timeout=30)
-                nmessage_data = {}
+                nmessage = await asyncio.wait_for(websocket.receive_text(), timeout=PING_INTERVAL)
+
+                if nmessage == "pong":
+                    last_pong = asyncio.get_event_loop().time()
+                    continue  
+
                 try:
                     nmessage_data = json.loads(nmessage)
-                except:
-                    pass
+                except json.JSONDecodeError:
+                    nmessage_data = {}
+
                 await notify_websockets(nmessage_data)
+
             except asyncio.TimeoutError:
                 await websocket.send_text("ping")
+
+                now = asyncio.get_event_loop().time()
+                if now - last_pong > PING_INTERVAL + PONG_TIMEOUT:
+                    print(f"Client {websocket} missed pong, closing.")
+                    break 
+
     except WebSocketDisconnect:
-        websockets.remove(websocket)
-    except Exception:
-        websockets.remove(websocket)
+        print(f"Client disconnected: {websocket}")
+    except Exception as e:
+        print(f"WebSocket error: {e}")
+    finally:
+        if websocket in websockets:
+            websockets.remove(websocket)
+
 
 
 async def notify_websockets(message: dict):
