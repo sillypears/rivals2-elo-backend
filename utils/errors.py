@@ -125,6 +125,8 @@ async def safe_db_fetch_one(request: Request, query: str, params: tuple = ()) ->
                 await cur.execute(query, params)
                 row = await cur.fetchone()
                 if row is None:
+                    if "DELETE" in query:
+                        return SuccessResponse(message=f"Deleted", data=row).model_dump() 
                     raise MatchNotFoundError("No data found for the given criteria")
                 return SuccessResponse(data=row).model_dump()
     except MatchNotFoundError:

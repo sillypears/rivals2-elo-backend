@@ -210,7 +210,7 @@ async def get_current_tier(req: Request) -> dict:
 
     except Exception as e:
         print(f"eeee: {e}")
-        return err.ErrorResponse(message=e)
+        return err.ErrorResponse(message=str(e))
 
 
 @app.get("/movelist", tags=["Moves", "Meta"])
@@ -487,8 +487,8 @@ async def get_elo_changes(req: Request, match_number: int = 10) -> dict:
             COALESCE((
             SELECT SUM(elo_change)
             FROM (
-                SELECT match_win, elo_change
-                FROM matches_vw
+                SELECT m.match_win, elo_change
+                FROM matches_vw m
                 ORDER BY id DESC
                 LIMIT {int(match_number)}
             ) AS recent
@@ -498,8 +498,8 @@ async def get_elo_changes(req: Request, match_number: int = 10) -> dict:
             COALESCE((
             SELECT SUM(elo_change)
             FROM (
-                SELECT match_win, elo_change
-                FROM matches_vw
+                SELECT m.match_win, elo_change
+                FROM matches_vw m
                 ORDER BY id DESC
                 LIMIT {int(match_number)}
             ) AS recent
@@ -823,17 +823,19 @@ async def insert_match(match: Match, debug: bool = 0) -> dict:
                     match.game_3_char_pick, match.game_3_opponent_pick, match.game_3_stage, match.game_3_winner, match.game_3_final_move_id,
                     match.final_move_id
                 ))
-                await notify_websockets({'user': 'backend', 'type': 'new_match', 'ranked_game_number': int(match.ranked_game_number)})
-                print(f"Sending: {'user': 'backend', 'type': 'new_match', 'ranked_game_number': int(match.ranked_game_number)}" )
-                if match.match_win == 1:
-                    await notify_websockets({'user': 'backend', 'type': 'new_win_stats', 'ranked_game_number': int(match.ranked_game_number)})
-                elif match.match_win == 0:
-                    await notify_websockets({'user': 'backend', 'type': 'new_lose_stats', 'ranked_game_number': int(match.ranked_game_number)})
-
-                inserted_id = cur.lastrowid
-
             except Exception as e:
-                return err.ErrorResponse(message=e.args).model_dump()
+                return err.ErrorResponse(message=f"{e}").model_dump()
+            try:
+                await notify_websockets(message={"user": "backend", "type": "new_match", "ranked_game_number": int(match.ranked_game_number)})
+                print("""Sending: {"user": "backend", "type": "new_match", "ranked_game_number": %i }""" % (int(match.ranked_game_number)))
+                if match.match_win == 1:
+                    await notify_websockets(message={"user": "backend", "type": "new_win_stats", "ranked_game_number": int(match.ranked_game_number)})
+                elif match.match_win == 0:
+                    await notify_websockets(message={"user": "backend", "type": "new_lose_stats", "ranked_game_number": int(match.ranked_game_number)})
+                inserted_id = cur.lastrowid
+            except Exception as e:
+                print(f"Insert fail: {e}")
+                return err.ErrorResponse(message=f"{e}").model_dump()
     return err.SuccessResponse(data={"last_id": inserted_id}).model_dump()
 
 # patch
@@ -865,7 +867,8 @@ async def delete_match(req: Request, id: int) -> dict:
     query = f'''
         DELETE FROM matches WHERE id = {id} 
     '''
-    return err.safe_db_fetch_one(request=req, query=query)
+    await notify_websockets({"type": "new_match"})
+    return await err.safe_db_fetch_one(request=req, query=query)
 
 # websockets
 
@@ -876,8 +879,8 @@ async def websocket_endpoint(websocket: WebSocket):
     print(f"New connection: {websocket}")
 
     last_pong = asyncio.get_event_loop().time()  
-    PING_INTERVAL = 5
-    PONG_TIMEOUT = 5   
+    PING_INTERVAL = 60
+    PONG_TIMEOUT = 10 
     try:
         while True:
             try:
