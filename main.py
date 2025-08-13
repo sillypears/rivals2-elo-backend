@@ -582,9 +582,15 @@ async def get_elo_by_season(req: Request) -> dict:
                 ',',
                 - 1) AS INTEGER) AS median_elo,
         MAX(m.elo_rank_new) AS max_elo,
+        (SELECT m2.elo_rank_new 
+        FROM matches_vw m2 
+        WHERE m2.season_id = s.id 
+        AND m2.ranked_game_number = 1
+        ) AS first_elo,
         (MAX(m.elo_rank_new) - MIN(m.elo_rank_old)) AS elo_gain,
         COUNT(*) AS match_count,
         s.display_name
+
     FROM
         matches_vw m
             JOIN
@@ -784,7 +790,7 @@ async def get_top_matchups_by_name(req: Request):
         OR m.opponent_name != ""
     GROUP BY
         m.opponent_name
-    ORDER BY count DESC
+    ORDER BY count DESC, m.opponent_name ASC
     '''
     return await err.safe_db_fetch_all(request=req, query=query)
 # post
