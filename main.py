@@ -101,6 +101,27 @@ async def database_exception_handler(request, exc):
 async def favicon() -> FileResponse:
     return FileResponse('favicon.ico')
 
+async def check_database(req: Request):
+    try:
+        async with req.app.state.db_pool.acquire() as conn:
+            async with conn.cursor(aiomysql.DictCursor) as cur:
+                await cur.execute("SELECT 1")
+                rows = await cur.fetchone()
+        return {"status": "healthy", "message": "Database connection successful"}
+    except Exception as e:
+        return {"status": "unhealthy", "message": str(e)}
+
+@app.get("/healthcheck", tags=["Health"])
+async def health_check(req: Request):
+    db_status = await check_database(req)
+    
+    return {
+        "timestamp": datetime.now().isoformat(),
+        "status": "healthy" if db_status["status"] == "healthy" else "unhealthy",
+        "details": {
+            "database": db_status
+        }
+    }
 
 @app.get("/characters", tags=["Characters", "Meta"])
 async def get_characters(req: Request) -> dict:
