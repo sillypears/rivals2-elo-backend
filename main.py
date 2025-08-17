@@ -378,6 +378,34 @@ async def get_char_stats(req: Request) -> dict:
             '''
     return await err.safe_db_fetch_all(request=req, query=query)
 
+@app.get("/char-stats-picked", tags=["Charts"])
+async def get_chars_by_times_picked(req: Request):
+    query = '''
+    SELECT opponent_pick_name, COUNT(*) AS times_played, season_display_name
+    FROM (
+        SELECT game_1_opponent_pick_name AS opponent_pick_name,
+        season_display_name
+        FROM matches_vw
+        WHERE game_1_opponent_pick_name <> 'N/A'
+        
+        UNION ALL
+        
+        SELECT game_2_opponent_pick_name,
+        season_display_name
+        FROM matches_vw
+        WHERE game_2_opponent_pick_name <> 'N/A'
+        
+        UNION ALL
+        
+        SELECT game_3_opponent_pick_name,
+        season_display_name
+        FROM matches_vw
+        WHERE game_3_opponent_pick_name <> 'N/A'
+    ) AS all_picks
+    GROUP BY opponent_pick_name, season_display_name
+    ORDER BY times_played DESC;
+    '''
+    return await err.safe_db_fetch_all(request=req, query=query)
 
 @app.get("/stage-stats", tags=["Charts"])
 async def get_stage_stats(req: Request) -> dict:
@@ -795,6 +823,33 @@ async def get_top_matchups_by_name(req: Request):
     ORDER BY count DESC, m.opponent_name ASC
     '''
     return await err.safe_db_fetch_all(request=req, query=query)
+
+@app.get("/heatmap-data", tags=["Charts"])
+async def get_data_for_heatmap(req: Request):
+    query = '''
+        SELECT char_name, COUNT(*) AS pick_count
+        FROM (
+            SELECT game_1_opponent_pick_name AS char_name
+            FROM matches_vw
+            WHERE game_1_opponent_pick != -1
+
+            UNION ALL
+
+            SELECT game_2_opponent_pick_name
+            FROM matches_vw
+            WHERE game_2_opponent_pick != -1
+
+            UNION ALL
+
+            SELECT game_3_opponent_pick_name
+            FROM matches_vw
+            WHERE game_3_opponent_pick != -1
+        ) AS picks
+        GROUP BY char_name
+        ORDER BY pick_count DESC;
+    '''
+    return await err.safe_db_fetch_all(request=req, query=query)
+
 # post
 
 
