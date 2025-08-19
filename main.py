@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
@@ -114,10 +114,22 @@ async def check_database(req: Request):
 @app.get("/healthcheck", tags=["Health"])
 async def health_check(req: Request):
     db_status = await check_database(req)
+   
+    if db_status["status"] == "unhealthy":
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "timestamp": datetime.now().isoformat(),
+                "status": "unhealthy",
+                "details": {
+                    "database": db_status
+                }
+            }
+        )
     
     return {
         "timestamp": datetime.now().isoformat(),
-        "status": "healthy" if db_status["status"] == "healthy" else "unhealthy",
+        "status": "healthy",
         "details": {
             "database": db_status
         }
@@ -715,8 +727,7 @@ async def get_head_to_head_by_user(req: Request, opp_name: str = ""):
             CASE WHEN game_3_winner = 0 THEN 1 ELSE 0 END) as games_lost
         FROM matches_vw
         WHERE LOWER(opponent_name) = LOWER('%s')
-        ORDER BY match_date DESC
-        LIMIT 5;
+        ORDER BY match_date DESC;
     ''' % (opp_name)
 
     temp = await err.safe_db_fetch_all(request=req, query=query)
