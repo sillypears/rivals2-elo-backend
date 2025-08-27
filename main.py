@@ -882,6 +882,57 @@ async def get_data_for_heatmap(req: Request):
     '''
     return await err.safe_db_fetch_all(request=req, query=query)
 
+@app.get("/stagepick-data", tags=["Charts"])
+async def get_data_for_heatmap(req: Request):
+    query = '''
+        WITH stage_data AS (
+        SELECT 
+            season_id,
+            season_short_name,
+            season_display_name,
+            game_1_stage as stage_id,
+            game_1_stage_name as stage_name
+        FROM matches_vw
+        WHERE game_1_stage != -1 AND LOWER(game_1_stage_name) != 'n/a'
+        
+        UNION ALL
+        
+        SELECT 
+            season_id,
+            season_short_name, 
+            season_display_name,
+            game_2_stage as stage_id,
+            game_2_stage_name as stage_name
+        FROM matches_vw
+        WHERE game_2_stage != -1 AND LOWER(game_2_stage_name) != 'n/a'
+        
+        UNION ALL
+        
+        SELECT 
+            season_id,
+            season_short_name,
+            season_display_name, 
+            game_3_stage as stage_id,
+            game_3_stage_name as stage_name
+        FROM matches_vw
+        WHERE game_3_stage != -1 AND LOWER(game_3_stage_name) != 'n/a'
+        )
+
+        SELECT 
+        season_id,
+        season_short_name,
+        season_display_name,
+        stage_id,
+        stage_name,
+            ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (PARTITION BY season_id), 2) as pick_percentage,
+        COUNT(*) as pick_count
+        FROM stage_data
+        GROUP BY  season_display_name, stage_id, stage_name
+        ORDER BY pick_count DESC;
+    '''
+
+    return await err.safe_db_fetch_all(request=req, query=query)
+
 # post
 
 
