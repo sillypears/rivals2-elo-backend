@@ -933,6 +933,92 @@ async def get_data_for_heatmap(req: Request):
 
     return await err.safe_db_fetch_all(request=req, query=query)
 
+@app.get("/character-mu-data", tags=["Charts"])
+async def get_character_matchup_data(req: Request):
+    query = '''
+    WITH individual_games AS (
+        SELECT 
+            m.season_display_name,
+            m.season_id,
+            m.elo_rank_new,
+            m.game_1_opponent_pick_name as opponent_character,
+            CASE WHEN m.game_1_winner = 1 THEN 1 ELSE 0 END as game_won
+        FROM matches_vw m
+        WHERE m.game_1_opponent_pick_name IS NOT NULL 
+        AND m.game_1_opponent_pick_name != 'N/A' 
+        AND m.game_1_opponent_pick != -1
+        AND m.game_1_winner != -1
+        AND m.match_forfeit = 0
+        
+        UNION ALL
+        SELECT 
+            m.season_display_name,
+            m.season_id,
+            m.elo_rank_new,
+            m.game_2_opponent_pick_name as opponent_character,
+            CASE WHEN m.game_2_winner = 1 THEN 1 ELSE 0 END as game_won
+        FROM matches_vw m
+        WHERE m.game_2_opponent_pick_name IS NOT NULL 
+        AND m.game_2_opponent_pick_name != 'N/A' 
+        AND m.game_2_opponent_pick != -1
+        AND m.game_2_winner != -1
+        AND m.match_forfeit = 0
+        
+        UNION ALL
+        SELECT 
+            m.season_display_name,
+            m.season_id,
+            m.elo_rank_new,
+            m.game_3_opponent_pick_name as opponent_character,
+            CASE WHEN m.game_3_winner = 1 THEN 1 ELSE 0 END as game_won
+        FROM matches_vw m
+        WHERE m.game_3_opponent_pick_name IS NOT NULL 
+        AND m.game_3_opponent_pick_name != 'N/A' 
+        AND m.game_3_opponent_pick != -1
+        AND m.game_3_winner != -1
+        AND m.match_forfeit = 0
+    )
+
+    SELECT 
+        ig.season_display_name,
+        t.tier_display_name,
+        t.tier_short_name,
+        ig.opponent_character,
+        COUNT(*) as total_games,
+        SUM(ig.game_won) as games_won,
+        COUNT(*) - SUM(ig.game_won) as games_lost,
+        ROUND(
+            CASE 
+                WHEN COUNT(*) > 0 THEN (SUM(ig.game_won) * 100.0 / COUNT(*))
+                ELSE 0 
+            END, 2
+        ) as win_percentage
+    FROM individual_games ig
+    INNER JOIN (
+        SELECT 1 as id, 'Stone' as tier_display_name, 'stone' as tier_short_name, 0 as min_threshold, 499 as max_threshold
+        UNION ALL SELECT 2, 'Bronze', 'bronze', 500, 699
+        UNION ALL SELECT 3, 'Silver', 'silver', 700, 899
+        UNION ALL SELECT 4, 'Gold', 'gold', 900, 1099
+        UNION ALL SELECT 5, 'Platinum', 'plat', 1100, 1299
+        UNION ALL SELECT 6, 'Diamond', 'diamond', 1300, 1499
+        UNION ALL SELECT 7, 'Master', 'master', 1500, 1699
+        UNION ALL SELECT 8, 'Grandmaster', 'gs', 1700, 1799
+        UNION ALL SELECT 9, 'Aetherean', 'aeth', 1800, 99999
+    ) t ON ig.elo_rank_new BETWEEN t.min_threshold AND t.max_threshold
+    GROUP BY 
+        ig.season_display_name,
+        ig.season_id,
+        t.id,
+        t.tier_display_name,
+        t.tier_short_name,
+        ig.opponent_character
+    ORDER BY 
+        ig.season_id DESC,
+        t.id ASC,
+        win_percentage DESC,
+        total_games DESC;
+    '''
+    return await err.safe_db_fetch_all(request=req, query=query)
 # post
 
 
