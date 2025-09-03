@@ -981,6 +981,7 @@ async def get_character_matchup_data(req: Request):
 
     SELECT 
         ig.season_display_name,
+        ig.season_id,
         t.tier_display_name,
         t.tier_short_name,
         ig.opponent_character,
