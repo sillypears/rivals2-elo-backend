@@ -738,9 +738,9 @@ async def get_head_to_head_by_user(req: Request, opp_name: str = ""):
     query = '''
         SELECT 
             stage_name,
-            games_played,
-            games_won,
-            ROUND(CAST(games_won AS DECIMAL) / games_played * 100, 1) as win_rate
+            SUM(games_played) AS games_played,
+            SUM(games_won) AS games_won,
+            ROUND(CAST(SUM(games_won) AS DECIMAL) / SUM(games_played) * 100, 1) AS win_rate
         FROM (
             SELECT 
                 game_1_stage_name as stage_name,
