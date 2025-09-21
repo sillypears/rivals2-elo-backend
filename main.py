@@ -4,7 +4,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
 import aiomysql
-from typing import List
 from dotenv import load_dotenv
 from utils.match import Match
 import asyncio
@@ -859,31 +858,35 @@ async def get_top_matchups_by_name(req: Request):
 @app.get("/heatmap-data", tags=["Charts"])
 async def get_data_for_heatmap(req: Request):
     query = '''
-        SELECT char_name, COUNT(*) AS pick_count
+        SELECT 
+            season_id,
+            season_display_name,
+            char_name,
+            COUNT(*) AS pick_count
         FROM (
-            SELECT game_1_opponent_pick_name AS char_name
+            SELECT season_id, season_display_name, game_1_opponent_pick_name AS char_name
             FROM matches_vw
             WHERE game_1_opponent_pick != -1
 
             UNION ALL
 
-            SELECT game_2_opponent_pick_name
+            SELECT season_id, season_display_name, game_2_opponent_pick_name
             FROM matches_vw
             WHERE game_2_opponent_pick != -1
 
             UNION ALL
 
-            SELECT game_3_opponent_pick_name
+            SELECT season_id, season_display_name, game_3_opponent_pick_name
             FROM matches_vw
             WHERE game_3_opponent_pick != -1
         ) AS picks
-        GROUP BY char_name
-        ORDER BY pick_count DESC;
+        GROUP BY season_id, season_display_name, char_name
+        ORDER BY season_id DESC, pick_count DESC;
     '''
     return await err.safe_db_fetch_all(request=req, query=query)
 
 @app.get("/stagepick-data", tags=["Charts"])
-async def get_data_for_heatmap(req: Request):
+async def get_data_for_stageheatmap(req: Request):
     query = '''
         WITH stage_data AS (
         SELECT 
@@ -1146,16 +1149,28 @@ async def websocket_endpoint(websocket: WebSocket):
         if websocket in websockets:
             websockets.remove(websocket)
 
-
-
 async def notify_websockets(message: dict):
-    for ws in websockets[:]:
-        try:
-            await ws.send_json(message)
-            print(f"Sent: {message}")
-        except Exception:
-            print("WebSocket failed; removing")
-            websockets.remove(ws)
+    """
+    Sends a message to all connected WebSocket clients concurrently.
+    """
+    sockets_to_notify = websockets[:]
+    if not sockets_to_notify:
+        return
+
+    send_tasks = [ws.send_json(message) for ws in sockets_to_notify]
+
+    results = await asyncio.gather(*send_tasks, return_exceptions=True)
+
+    for ws, result in zip(sockets_to_notify, results):
+        if isinstance(result, Exception):
+            print(f"WebSocket failed; removing. Error: {result}")
+            try:
+                websockets.remove(ws)
+            except ValueError:
+                pass
+
+    print(f"Message broadcasted. {len(websockets)} active connections remaining.")
+
 
 
 async def get_latest_match_id(req: Request):
