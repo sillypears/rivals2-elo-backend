@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from utils.match import Match
 import asyncio
 import json
-from typing import Any, List, Dict
+from typing import Any, List, Dict, Set
 from pydantic import TypeAdapter, BaseModel, Field
 import utils.errors as err
 from datetime import datetime
@@ -84,7 +84,7 @@ app.add_exception_handler(err.MatchNotFoundError, err.match_not_found_handler)
 app.add_exception_handler(err.RequestValidationError, err.validation_exception_handler)
 app.add_exception_handler(Exception, err.general_exception_handler)
 
-websockets: List[WebSocket] = []
+websockets: Set[WebSocket] = set()
 
 
 class DatabaseError(Exception):
@@ -1108,52 +1108,75 @@ async def delete_match(req: Request, id: int) -> dict:
 
 # websockets
 
+@app.get("/ws-test", tags=["WebSockets"])
+async def test_websocket_broadcast():
+    """
+    Endpoint to send a test message to all connected WebSocket clients.
+    """
+    message = {
+        "type": "test_message",
+        "content": "This is a test broadcast from the server.",
+        "timestamp": datetime.now().isoformat()
+    }
+    await notify_websockets(message)
+    return {"status": "success", "detail": "Test message broadcasted."}
+
+@app.get("/ws-count", tags=["WebSockets"])
+async def get_websocket_count(req: Request) -> dict:
+    """
+    Endpoint to get the count of connected WebSocket clients.
+    """
+    
+    return {"count": len(websockets), "websockets": ", ".join([str(ws.client) for ws in websockets])}
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
-    websockets.append(websocket)
+    websockets.add(websocket)
     print(f"New connection: {websocket}")
 
-    last_pong = asyncio.get_event_loop().time()  
-    PING_INTERVAL = 60
-    PONG_TIMEOUT = 10 
+    PING_SEC_INTERVAL = 60
+    PONG_SEC_TIMEOUT = 10
     try:
         while True:
             try:
-                nmessage = await asyncio.wait_for(websocket.receive_text(), timeout=PING_INTERVAL)
 
-                if nmessage == "pong":
-                    last_pong = asyncio.get_event_loop().time()
-                    continue  
+                message = await asyncio.wait_for(websocket.receive_text(), timeout=PING_SEC_INTERVAL)
+
+                if message == "pong":
+                    continue
 
                 try:
-                    nmessage_data = json.loads(nmessage)
+                    message_data = json.loads(message)
                 except json.JSONDecodeError:
-                    nmessage_data = {}
-
-                await notify_websockets(nmessage_data)
+                    print(f"Received malformed JSON from {websocket.client}. Ignoring.")
+                    continue
+                await notify_websockets(message_data, exclude=websocket)
 
             except asyncio.TimeoutError:
-                await websocket.send_text("ping")
+                try:
+                    await websocket.send_text("ping")
 
-                now = asyncio.get_event_loop().time()
-                if now - last_pong > PING_INTERVAL + PONG_TIMEOUT:
-                    print(f"Client {websocket} missed pong, closing.")
-                    break 
+                    await asyncio.wait_for(websocket.receive_text(), timeout=PONG_SEC_TIMEOUT)
+
+                except asyncio.TimeoutError:
+                    print(f"Client {websocket} did not respond to ping. Closing.")
+                    break
 
     except WebSocketDisconnect:
         print(f"Client disconnected: {websocket}")
     except Exception as e:
         print(f"WebSocket error: {e}")
     finally:
-        if websocket in websockets:
-            websockets.remove(websocket)
+        websockets.discard(websocket)
 
-async def notify_websockets(message: dict):
+async def notify_websockets(message: dict, exclude: WebSocket | None = None):
     """
     Sends a message to all connected WebSocket clients concurrently.
+    An optional `exclude` websocket can be provided to not send the message
+    to the original sender.
     """
-    sockets_to_notify = websockets[:]
+    sockets_to_notify = [ws for ws in websockets if ws is not exclude]
     if not sockets_to_notify:
         return
 
@@ -1164,10 +1187,7 @@ async def notify_websockets(message: dict):
     for ws, result in zip(sockets_to_notify, results):
         if isinstance(result, Exception):
             print(f"WebSocket failed; removing. Error: {result}")
-            try:
-                websockets.remove(ws)
-            except ValueError:
-                pass
+            websockets.discard(ws)
 
     print(f"Message broadcasted. {len(websockets)} active connections remaining.")
 
