@@ -227,7 +227,7 @@ async def get_current_tier(req: Request) -> dict:
                 total_wins
             FROM
                 matches_vw
-            ORDER BY id DESC
+            ORDER BY match_date DESC, id DESC
             LIMIT 1
         '''
         elo_raw = await err.safe_db_fetch_one(request=req, query=query)
