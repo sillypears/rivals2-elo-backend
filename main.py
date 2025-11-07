@@ -1065,6 +1065,35 @@ async def get_game_duration_by_season(req: Request) -> dict:
     '''
     return await err.safe_db_fetch_all(request=req, query=query)
 
+@app.get("/game_duration/opponent", tags=["Matches", "Time"])
+async def get_game_duration_by_opponent(req: Request) -> dict:
+    query = '''
+    SELECT 
+        opponent_char AS opponent_character,
+        ROUND(AVG(duration), 0) AS avg_game_duration,
+        COUNT(*) AS game_count
+    FROM (
+        SELECT game_1_opponent_pick_name AS opponent_char, game_1_duration AS duration
+        FROM matches_vw
+        WHERE game_1_duration > 0 AND game_1_opponent_pick_name <> 'N/A'
+
+        UNION ALL
+
+        SELECT game_2_opponent_pick_name, game_2_duration
+        FROM matches_vw
+        WHERE game_2_duration > 0 AND game_2_opponent_pick_name <> 'N/A'
+
+        UNION ALL
+
+        SELECT game_3_opponent_pick_name, game_3_duration
+        FROM matches_vw
+        WHERE game_3_duration > 0 AND game_3_opponent_pick_name <> 'N/A'
+    ) AS durations
+    GROUP BY opponent_char
+    ORDER BY avg_game_duration DESC;
+    '''
+    return await err.safe_db_fetch_all(request=req, query=query)
+
 # post
 @app.post("/insert-match", tags=["Matches", "Mutable"])
 async def insert_match(match: Match, debug: bool = 0) -> dict:
