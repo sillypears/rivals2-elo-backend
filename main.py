@@ -1030,9 +1030,42 @@ async def get_character_matchup_data(req: Request):
         total_games DESC;
     '''
     return await err.safe_db_fetch_all(request=req, query=query)
+
+@app.get("/game_duration", tags=["Matches", "Time"])
+async def get_game_duration(req: Request) -> dict:
+    query = '''
+    SELECT 
+        ROUND(AVG(duration), 0) AS avg_game_duration
+    FROM (
+        SELECT game_1_duration AS duration FROM matches_vw WHERE game_1_duration > 0
+        UNION ALL
+        SELECT game_2_duration FROM matches_vw WHERE game_2_duration > 0
+        UNION ALL
+        SELECT game_3_duration FROM matches_vw WHERE game_3_duration > 0
+    ) AS durations;
+    '''
+    return await err.safe_db_fetch_all(request=req, query=query)
+
+@app.get("/game_duration/season", tags=["Matches", "Time"])
+async def get_game_duration_by_season(req: Request) -> dict:
+    query = '''
+    SELECT 
+        season_id,
+        season_display_name,
+        ROUND(AVG(duration), 0) AS avg_game_duration
+    FROM (
+        SELECT season_id, season_display_name, game_1_duration AS duration FROM matches_vw WHERE game_1_duration > 0
+        UNION ALL
+        SELECT season_id, season_display_name, game_2_duration FROM matches_vw WHERE game_2_duration > 0
+        UNION ALL
+        SELECT season_id, season_display_name, game_3_duration FROM matches_vw WHERE game_3_duration > 0
+    ) AS durations
+    GROUP BY season_id, season_display_name
+    ORDER BY season_id;
+    '''
+    return await err.safe_db_fetch_all(request=req, query=query)
+
 # post
-
-
 @app.post("/insert-match", tags=["Matches", "Mutable"])
 async def insert_match(match: Match, debug: bool = 0) -> dict:
     print(match)
