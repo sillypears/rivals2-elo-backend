@@ -72,7 +72,7 @@ async def db_fetch_one(request: Request, query: str, params: tuple = ()) -> Dict
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://192.168.1.30:8006", "http://192.168.1.30:8007"],
+    allow_origins=["http://192.168.1.30:8006", "http://192.168.1.30:8007", "http://r2f.podme.local", "https://r2f.podme.local"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -111,7 +111,7 @@ async def check_database(req: Request):
         return {"status": "unhealthy", "message": str(e)}
 
 @app.get("/healthcheck", tags=["Health"])
-async def health_check(req: Request):
+async def health_check(req: Request) -> dict:
     db_status = await check_database(req)
    
     if db_status["status"] == "unhealthy":
@@ -135,7 +135,7 @@ async def health_check(req: Request):
     }
 
 @app.get("/characters", tags=["Characters", "Meta"])
-async def get_characters(req: Request) -> dict:
+async def get_characters(req: Request) -> Dict[str, Any]:
     query = '''
         SELECT * FROM characters
     '''
