@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from datetime import datetime
-from .base import ApiResponse
+from ..base import ApiResponse
 class SeasonLatest(BaseModel):
     id: int
     short_name: str

@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 from datetime import datetime
 from typing import List
-from .base import ApiResponse
+from ..base import ApiResponse
 
 class Seasons(BaseModel):
     id: int
