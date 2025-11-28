@@ -91,7 +91,14 @@ async def db_fetch_one(request: Request, query: str, params: tuple = ()) -> Dict
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8006", "http://192.168.1.30:8006", "http://192.168.1.30:8007", "http://r2f.podme.local", "https://r2f.podme.local"],
+    allow_origins=[
+        "http://localhost:8006", 
+        "http://localhost:8007",
+        "http://192.168.1.55:8007",
+        "http://192.168.1.30:8006", 
+        "http://192.168.1.30:8007", 
+        "http://r2f.podme.local", 
+        "https://r2f.podme.local"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
