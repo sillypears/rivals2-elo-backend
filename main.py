@@ -17,7 +17,7 @@ from datetime import datetime
 from models.responses.seasons import (
     ApiResponse,
     Seasons,
-    SeasonLatest,
+    SeasonLatestResponse,
     SeasonListResponse,
     SingleSeasonResponse,
 )
@@ -159,10 +159,9 @@ async def get_characters(req: Request) -> dict:
     return await err.safe_db_fetch_all(request=req, query=query)
 
 
-@app.get("/seasons", tags=["Seasons", "Meta"])
+@app.get("/seasons", tags=["Seasons", "Meta"], response_model=SeasonListResponse)
 async def get_seasons(req: Request) -> dict:
     latest_season = await get_latest_season(req)
-    print(latest_season)
     query = f'''
         SELECT 
             id,
@@ -177,10 +176,9 @@ async def get_seasons(req: Request) -> dict:
         {**season, 'latest': True} if season['id'] == latest_season['data']['id'] else {**season, 'latest': False}
         for season in seasons['data']
     ]
-    print(updated_seasons)
     return err.SuccessResponse(data=updated_seasons).model_dump()
     
-@app.get("/season/latest", tags=["Seasons", "Meta"], response_model=ApiResponse[SeasonLatest])
+@app.get("/season/latest", tags=["Seasons", "Meta"], response_model=SeasonLatestResponse)
 async def get_latest_season(req: Request):
     query = '''
         SELECT id, short_name, display_name, start_date, end_date FROM seasons WHERE '%s' BETWEEN start_date AND end_date

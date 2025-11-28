@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from datetime import datetime
-
+from .base import ApiResponse
 class SeasonLatest(BaseModel):
     id: int
     short_name: str
@@ -10,4 +10,5 @@ class SeasonLatest(BaseModel):
 
     model_config = {"from_attributes": True}
 
-SeasonLatest.model_rebuild()
+SeasonLatestResponse = ApiResponse[SeasonLatest]
+SeasonLatestResponse.model_rebuild()
