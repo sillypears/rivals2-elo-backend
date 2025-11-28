@@ -13,6 +13,15 @@ from pydantic import TypeAdapter, BaseModel, Field
 import utils.errors as err
 from datetime import datetime
 
+# response model imports
+from models.responses.seasons import (
+    ApiResponse,
+    Seasons,
+    SeasonLatest,
+    SeasonListResponse,
+    SingleSeasonResponse,
+)
+
 load_dotenv()
 ALLOWED_UPDATE_COLUMNS = {
     'match_date', 'elo_rank_old', 'elo_rank_new', 'elo_change', 'match_win',
@@ -72,7 +81,7 @@ async def db_fetch_one(request: Request, query: str, params: tuple = ()) -> Dict
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://192.168.1.30:8006", "http://192.168.1.30:8007", "http://r2f.podme.local", "https://r2f.podme.local"],
+    allow_origins=["http://localhost:8006", "http://192.168.1.30:8006", "http://192.168.1.30:8007", "http://r2f.podme.local", "https://r2f.podme.local"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -171,12 +180,13 @@ async def get_seasons(req: Request) -> dict:
     print(updated_seasons)
     return err.SuccessResponse(data=updated_seasons).model_dump()
     
-@app.get("/season/latest", tags=["Seasons", "Meta"])
+@app.get("/season/latest", tags=["Seasons", "Meta"], response_model=SeasonLatest)
 async def get_latest_season(req: Request):
     query = '''
-        SELECT id, short_name, display_name FROM seasons WHERE '%s' BETWEEN start_date AND end_date
+        SELECT id, short_name, display_name, start_date, end_date FROM seasons WHERE '%s' BETWEEN start_date AND end_date
     ''' % (datetime.now().isoformat())
     return await err.safe_db_fetch_one(request=req, query=query)
+
 
 @app.get("/ranked_tiers", tags=["Ranked", "Meta"])
 async def get_ranked_tier_list(req: Request) -> dict:
