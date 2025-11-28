@@ -14,12 +14,22 @@ import utils.errors as err
 from datetime import datetime
 
 # response model imports
+
+from models.responses import (
+    ApiResponse
+)
+
 from models.responses.seasons import (
-    ApiResponse,
     Seasons,
     SeasonLatestResponse,
     SeasonListResponse,
     SingleSeasonResponse,
+)
+
+from models.responses.characters import (
+    Character,
+    CharactersListResponse,
+    SingleCharacterResponse
 )
 
 load_dotenv()
@@ -143,7 +153,7 @@ async def health_check(req: Request) -> dict:
         }
     }
 
-@app.get("/characters", tags=["Characters", "Meta"])
+@app.get("/characters", tags=["Characters", "Meta"], response_model=CharactersListResponse)
 async def get_characters(req: Request) -> Dict[str, Any]:
     query = '''
         SELECT * FROM characters
