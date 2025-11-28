@@ -180,7 +180,7 @@ async def get_seasons(req: Request) -> dict:
     print(updated_seasons)
     return err.SuccessResponse(data=updated_seasons).model_dump()
     
-@app.get("/season/latest", tags=["Seasons", "Meta"], response_model=SeasonLatest)
+@app.get("/season/latest", tags=["Seasons", "Meta"], response_model=ApiResponse[SeasonLatest])
 async def get_latest_season(req: Request):
     query = '''
         SELECT id, short_name, display_name, start_date, end_date FROM seasons WHERE '%s' BETWEEN start_date AND end_date
