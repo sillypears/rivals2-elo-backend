@@ -153,7 +153,13 @@ async def health_check(req: Request) -> dict:
         }
     }
 
-@app.get("/characters", tags=["Characters", "Meta"], response_model=CharactersListResponse)
+@app.get(
+    "/characters", 
+    summary="Character List",
+    description="This returns a list of all characters currently in the database",
+    status_code=status.HTTP_200_OK,
+    tags=["Characters", "Meta"], 
+    response_model=CharactersListResponse)
 async def get_characters(req: Request) -> Dict[str, Any]:
     query = '''
         SELECT * FROM characters
@@ -1164,7 +1170,13 @@ async def insert_match(match: Match, debug: bool = 0) -> dict:
 # patch
 
 
-@app.patch("/update-match/", tags=["Mutable"])
+@app.patch(
+    "/update-match/",
+    responses={
+        200: {"description": "Successful patch"},
+        422: {"description": "Validation error - please correct data"}
+    },
+    tags=["Mutable"])
 async def update_match(update_value: dict) -> dict:
     try:
         match_id = int(update_value['row_id'])
@@ -1183,7 +1195,10 @@ async def update_match(update_value: dict) -> dict:
 # delete
 
 
-@app.delete("/match/{id}", tags=["Matches", "Mutable"])
+@app.delete(
+    "/match/{id}", 
+    tags=["Matches", 
+    "Mutable"])
 async def delete_match(req: Request, id: int) -> dict:
     if type(id) != int:
         return {"status": "FAIL", "data": {"message": "Invalid match ID"}}
