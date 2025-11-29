@@ -1176,7 +1176,6 @@ async def insert_match(match: Match, debug: bool = 0) -> dict:
 
 # patch
 
-
 @app.patch(
     "/update-match/",
     responses={
