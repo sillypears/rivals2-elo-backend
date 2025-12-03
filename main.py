@@ -1253,7 +1253,10 @@ async def websocket_endpoint(websocket: WebSocket):
 
                 if message == "pong":
                     continue
-
+                
+                if message == "ping":
+                    await websocket.send_text(f"pong @ {datetime.now()}")
+                    continue
                 try:
                     message_data = json.loads(message)
                 except json.JSONDecodeError:
