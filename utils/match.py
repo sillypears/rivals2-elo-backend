@@ -4,7 +4,8 @@ from typing import Optional
 
 @dataclass
 class Match:
-    match_date: datetime
+    match_date: datetime 
+    match_id: int = -1
     elo_rank_new: int = -1
     elo_rank_old: int = -1
     elo_change: int = -9999

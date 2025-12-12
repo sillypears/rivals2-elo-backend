@@ -1128,7 +1128,6 @@ async def get_game_duration_by_opponent(req: Request) -> dict:
 # post
 @app.post("/insert-match", tags=["Matches", "Mutable"])
 async def insert_match(match: Match, debug: bool = 0) -> dict:
-    print(match)
     query = '''
         INSERT INTO matches (
             match_date, elo_rank_old, elo_rank_new, elo_change, match_win, match_forfeit,
@@ -1169,10 +1168,11 @@ async def insert_match(match: Match, debug: bool = 0) -> dict:
                 elif match.match_win == 0:
                     await notify_websockets(message={"user": "backend", "type": "new_lose_stats", "ranked_game_number": int(match.ranked_game_number)})
                 inserted_id = cur.lastrowid
+                match.match_id = inserted_id
             except Exception as e:
                 print(f"Insert fail: {e}")
                 return err.ErrorResponse(message=f"{e}").model_dump()
-    return err.SuccessResponse(data={"last_id": inserted_id}).model_dump()
+    return err.SuccessResponse(data=match).model_dump()
 
 # patch
 
