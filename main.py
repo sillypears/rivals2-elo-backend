@@ -173,7 +173,6 @@ async def get_characters(req: Request) -> Dict[str, Any]:
     '''
     return await err.safe_db_fetch_all(request=req, query=query)
 
-
 @app.get("/stages", tags=["Stages", "Meta"])
 async def get_characters(req: Request) -> dict:
     query = '''
@@ -245,7 +244,25 @@ async def get_opponent_name_list(req: Request):
     except Exception as e:
         return err.ErrorResponse(message=f"Could not get opponent_list: {e}")
 
+@app.get("/opponent_count", tags=["Ranked", "Meta"])
+async def get_opponent_counts(req: Request):
+    try:
+        query = f'''
+            SELECT 
+                COUNT(DISTINCT(opponent_name)) as total_unique_opponents,
+                COUNT(opponent_name) as matches_with_opponent_name
+            FROM
+                matches_vw
+            WHERE
+                opponent_name <> ''
+        '''
+        return await err.safe_db_fetch_all(request=req, query=query)
 
+    except Exception as e:
+        return err.ErrorResponse(message=f"Could not get opponent_list: {e}")
+
+
+    
 @app.get("/current_tier", tags=["Performance"])
 async def get_current_tier(req: Request) -> dict:
     try:
