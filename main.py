@@ -299,6 +299,28 @@ async def get_current_tier(req: Request) -> dict:
         print(f"eeee: {e}")
         return err.ErrorResponse(message=str(e))
 
+@app.get("/elo-swing", tags=["Performance"])
+async def get_elo_changes(req: Request) -> dict:
+    query = f"""
+        SELECT
+            ranked_game_number,
+            elo_rank_old,
+            opponent_elo,
+            ABS(elo_change) as elo_change_abs,
+            elo_change,
+            win_streak_value,
+            match_win,
+            season_id,
+            season_display_name
+        FROM
+            matches_vw
+        WHERE
+            ranked_game_number > 24
+        ORDER BY
+            ABS(elo_change) DESC
+        LIMIT 10
+    """
+    return await err.safe_db_fetch_all(request=req, query=query)
 
 @app.get("/movelist", tags=["Moves", "Meta"])
 async def get_movelist(req: Request) -> dict:
