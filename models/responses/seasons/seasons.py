@@ -10,7 +10,8 @@ class Seasons(BaseModel):
     short_name: str
     display_name: str
     latest: bool
-
+    season_index: int|None
+    steam_leaderboard: int|None
     model_config = {"from_attributes": True}  
 
 Seasons.model_rebuild()

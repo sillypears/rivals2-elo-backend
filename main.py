@@ -190,7 +190,9 @@ async def get_seasons(req: Request) -> dict:
             start_date, 
             end_date, 
             short_name, 
-            display_name 
+            display_name,
+            season_index,
+            steam_leaderboard
         FROM seasons
     '''
     seasons = await err.safe_db_fetch_all(request=req, query=query)
@@ -199,7 +201,14 @@ async def get_seasons(req: Request) -> dict:
         for season in seasons['data']
     ]
     return err.SuccessResponse(data=updated_seasons).model_dump()
-    
+
+@app.get("/season/:id", tags=["Seasons"])
+async def get_season_by_id(req: Request, id: int):
+    query = '''
+        SELECT id, short_name, display_name, start_date, end_date FROM seasons WHERE id = '%s'
+    ''' % (id)
+    return await err.safe_db_fetch_one(request=req, query=query)
+
 @app.get("/season/latest", tags=["Seasons", "Meta"], response_model=SeasonLatestResponse)
 async def get_latest_season(req: Request):
     query = '''
@@ -1237,6 +1246,28 @@ async def update_match(update_value: dict) -> dict:
                 return err.SuccessResponse(data=rows, message="hi").model_dump()
     return err.SuccessResponse(data={}).model_dump()
 
+@app.patch(
+    "/season/:id", 
+    responses={
+        200: {"description": "Successful patch"},
+        422: {"description": "Validation error - please correct data"}
+    },
+    tags=["Seasons", "Mutable"])
+async def update_season(update_value: dict) -> dict:
+    try:
+        season_id = int(update_value['row_id'])
+    except (ValueError, KeyError):
+        return {"status": "failure", "message": "No ID provided or invalid ID format"}
+    if season_id:
+        print(
+            f"""UPDATE matches SET {update_value['key']}="{update_value['value']}" WHERE id = {season_id}""")
+        async with app.state.db_pool.acquire() as conn:
+            async with conn.cursor(aiomysql.DictCursor) as cur:
+                await cur.execute(f"""UPDATE matches SET {update_value['key']}="{update_value['value']}" WHERE id = {season_id}""")
+                rows = await cur.fetchall()
+                return err.SuccessResponse(data=rows, message="hi").model_dump()
+    return err.SuccessResponse(data={}).model_dump()
+
 # delete
 
 
@@ -1249,6 +1280,19 @@ async def delete_match(req: Request, id: int) -> dict:
         return {"status": "FAIL", "data": {"message": "Invalid match ID"}}
     query = f'''
         DELETE FROM matches WHERE id = {id} 
+    '''
+    await notify_websockets({"type": "new_match"})
+    return await err.safe_db_fetch_one(request=req, query=query)
+
+@app.delete(
+    "/season/{id}", 
+    tags=["Seasons", 
+    "Mutable"])
+async def delete_season(req: Request, id: int) -> dict:
+    if type(id) != int:
+        return {"status": "FAIL", "data": {"message": "Invalid season ID"}}
+    query = f'''
+        DELETE FROM seasons WHERE id = {id} 
     '''
     await notify_websockets({"type": "new_match"})
     return await err.safe_db_fetch_one(request=req, query=query)
