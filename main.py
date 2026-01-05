@@ -1247,7 +1247,7 @@ async def update_match(update_value: dict) -> dict:
     return err.SuccessResponse(data={}).model_dump()
 
 @app.patch(
-    "/season/:id", 
+    "/season/id/:id", 
     responses={
         200: {"description": "Successful patch"},
         422: {"description": "Validation error - please correct data"}
@@ -1285,7 +1285,7 @@ async def delete_match(req: Request, id: int) -> dict:
     return await err.safe_db_fetch_one(request=req, query=query)
 
 @app.delete(
-    "/season/{id}", 
+    "/season/id/{id}", 
     tags=["Seasons", 
     "Mutable"])
 async def delete_season(req: Request, id: int) -> dict:
