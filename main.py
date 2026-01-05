@@ -202,7 +202,7 @@ async def get_seasons(req: Request) -> dict:
     ]
     return err.SuccessResponse(data=updated_seasons).model_dump()
 
-@app.get("/season/:id", tags=["Seasons"])
+@app.get("/season/id/:id", tags=["Seasons"])
 async def get_season_by_id(req: Request, id: int):
     query = '''
         SELECT id, short_name, display_name, start_date, end_date FROM seasons WHERE id = '%s'
@@ -406,7 +406,7 @@ async def get_matches(req: Request, offset: int = 0, limit: int = 10) -> dict:
 
 
 @app.get("/match", tags=["Matches"])
-@app.get("/match/{id}", tags=["Matches"])
+@app.get("/match/id/{id}", tags=["Matches"])
 async def get_match(req: Request, id: int = -1) -> dict:
     if id < 1:
         try:
