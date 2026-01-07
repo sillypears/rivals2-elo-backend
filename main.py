@@ -23,7 +23,12 @@ from models.responses.seasons import (
     Seasons,
     SeasonLatestResponse,
     SeasonListResponse,
-    SingleSeasonResponse,
+    SingleSeasonResponse
+)
+
+from models.responses.season import (
+    Season,
+    SeasonResponse
 )
 
 from models.responses.characters import (
@@ -202,12 +207,30 @@ async def get_seasons(req: Request) -> dict:
     ]
     return err.SuccessResponse(data=updated_seasons).model_dump()
 
-@app.get("/season/id/:id", tags=["Seasons"])
+@app.get("/season/id/{id}", tags=["Seasons"], response_model=SeasonResponse)
 async def get_season_by_id(req: Request, id: int):
+    latest_season = await get_latest_season(req)
     query = '''
-        SELECT id, short_name, display_name, start_date, end_date FROM seasons WHERE id = '%s'
+        SELECT 
+            id, 
+            short_name, 
+            display_name, 
+            start_date, 
+            end_date,
+            season_index,
+            steam_leaderboard 
+        FROM 
+            seasons 
+        WHERE 
+            id = '%s'
     ''' % (id)
-    return await err.safe_db_fetch_one(request=req, query=query)
+    season = await err.safe_db_fetch_one(request=req, query=query)
+    if season['data']['id'] == latest_season['data']['id']:
+        season['data']['latest'] = True 
+    else:
+        season['data']['latest'] = False
+    
+    return err.SuccessResponse(data=season['data']).model_dump()
 
 @app.get("/season/latest", tags=["Seasons", "Meta"], response_model=SeasonLatestResponse)
 async def get_latest_season(req: Request):
@@ -1247,7 +1270,7 @@ async def update_match(update_value: dict) -> dict:
     return err.SuccessResponse(data={}).model_dump()
 
 @app.patch(
-    "/season/id/:id", 
+    "/season/id/{id}", 
     responses={
         200: {"description": "Successful patch"},
         422: {"description": "Validation error - please correct data"}
@@ -1272,7 +1295,7 @@ async def update_season(update_value: dict) -> dict:
 
 
 @app.delete(
-    "/match/{id}", 
+    "/match/id/{id}", 
     tags=["Matches", 
     "Mutable"])
 async def delete_match(req: Request, id: int) -> dict:
