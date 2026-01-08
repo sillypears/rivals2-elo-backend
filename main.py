@@ -37,6 +37,12 @@ from models.responses.characters import (
     SingleCharacterResponse
 )
 
+from models.responses.moves import (
+    Move,
+    MovesListResponse,
+    SingleMoveResponse
+)
+
 load_dotenv()
 ALLOWED_UPDATE_COLUMNS = {
     'match_date', 'elo_rank_old', 'elo_rank_new', 'elo_change', 'match_win',
@@ -174,10 +180,69 @@ async def health_check(req: Request) -> dict:
     response_model=CharactersListResponse)
 async def get_characters(req: Request) -> Dict[str, Any]:
     query = '''
-        SELECT * FROM characters
+        SELECT
+            id,
+            character_name,
+            display_name,
+            release_date,
+            list_order
+        FROM
+            characters
     '''
     return await err.safe_db_fetch_all(request=req, query=query)
 
+@app.get("/movelist", tags=["Moves", "Meta"], response_model=MovesListResponse)
+async def get_movelist(req: Request) -> dict:
+    query = '''
+        SELECT 
+            id,
+            short_name,
+            display_name,
+            category,
+            list_order
+        FROM
+            moves
+    '''
+    return await err.safe_db_fetch_all(request=req, query=query)
+
+@app.get("/movelist/top", tags=["Moves", "Meta"])
+async def get_movelist(req: Request) -> dict:
+    query = '''
+        SELECT
+            final_move_id,
+            final_move_name,
+            COUNT(*) AS usage_count
+        FROM (
+            SELECT
+                game_1_final_move_id AS final_move_id,
+                game_1_final_move_name AS final_move_name
+            FROM matches_vw
+            WHERE game_1_final_move_id != -1 AND LOWER(game_1_final_move_name) != 'n/a'
+
+            UNION ALL
+
+            SELECT
+                game_2_final_move_id,
+                game_2_final_move_name
+            FROM matches_vw
+            WHERE game_2_final_move_id != -1 AND LOWER(game_2_final_move_name) != 'n/a'
+
+            UNION ALL
+
+            SELECT
+                game_3_final_move_id,
+                game_3_final_move_name
+            FROM matches_vw
+            WHERE game_3_final_move_id != -1 AND LOWER(game_3_final_move_name) != 'n/a'
+        ) AS all_moves
+        GROUP BY
+            final_move_id, final_move_name
+        ORDER BY
+            usage_count DESC
+        LIMIT 5;
+    '''
+    return await err.safe_db_fetch_all(request=req, query=query)
+    
 @app.get("/stages", tags=["Stages", "Meta"])
 async def get_characters(req: Request) -> dict:
     query = '''
@@ -352,51 +417,6 @@ async def get_elo_changes(req: Request) -> dict:
             ABS(elo_change) DESC
         LIMIT 10
     """
-    return await err.safe_db_fetch_all(request=req, query=query)
-
-@app.get("/movelist", tags=["Moves", "Meta"])
-async def get_movelist(req: Request) -> dict:
-    query = '''
-        SELECT * FROM moves
-    '''
-    return await err.safe_db_fetch_all(request=req, query=query)
-
-@app.get("/movelist/top", tags=["Moves", "Meta"])
-async def get_movelist(req: Request) -> dict:
-    query = '''
-        SELECT
-            final_move_id,
-            final_move_name,
-            COUNT(*) AS usage_count
-        FROM (
-            SELECT
-                game_1_final_move_id AS final_move_id,
-                game_1_final_move_name AS final_move_name
-            FROM matches_vw
-            WHERE game_1_final_move_id != -1 AND LOWER(game_1_final_move_name) != 'n/a'
-
-            UNION ALL
-
-            SELECT
-                game_2_final_move_id,
-                game_2_final_move_name
-            FROM matches_vw
-            WHERE game_2_final_move_id != -1 AND LOWER(game_2_final_move_name) != 'n/a'
-
-            UNION ALL
-
-            SELECT
-                game_3_final_move_id,
-                game_3_final_move_name
-            FROM matches_vw
-            WHERE game_3_final_move_id != -1 AND LOWER(game_3_final_move_name) != 'n/a'
-        ) AS all_moves
-        GROUP BY
-            final_move_id, final_move_name
-        ORDER BY
-            usage_count DESC
-        LIMIT 5;
-    '''
     return await err.safe_db_fetch_all(request=req, query=query)
 
 @app.get("/matches", tags=["Matches"])
