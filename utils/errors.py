@@ -35,6 +35,7 @@ class SuccessResponse(BaseModel):
     status: str = "SUCCESS"
     data: Any
     message: Optional[str] = None
+    total: Optional[int] = None
 
 # Define allowed columns for updates (whitelist approach)
 ALLOWED_UPDATE_COLUMNS = {
@@ -112,7 +113,8 @@ async def safe_db_fetch_all(request: Request, query: str, params: tuple = ()) ->
             async with conn.cursor(aiomysql.DictCursor) as cur:
                 await cur.execute(query, params)
                 rows = await cur.fetchall()
-                return SuccessResponse(data=rows or []).model_dump()
+                row_count = len(rows) if rows else 0
+                return SuccessResponse(data=rows or [], total=row_count).model_dump()
     except Exception as e:
         logger.error(f"Database query failed: {query[:100]}... Error: {str(e)}")
         raise DatabaseError(f"Failed to fetch data: {str(e)}")
@@ -126,9 +128,9 @@ async def safe_db_fetch_one(request: Request, query: str, params: tuple = ()) ->
                 row = await cur.fetchone()
                 if row is None:
                     if "DELETE" in query:
-                        return SuccessResponse(message=f"Deleted", data=row).model_dump() 
+                        return SuccessResponse(message=f"Deleted", data=row, total=0).model_dump() 
                     raise MatchNotFoundError("No data found for the given criteria")
-                return SuccessResponse(data=row).model_dump()
+                return SuccessResponse(data=row, total=1).model_dump()
     except MatchNotFoundError:
         raise
     except Exception as e:

@@ -298,7 +298,7 @@ async def get_season_by_id(req: Request, id: int):
     return err.SuccessResponse(data=season['data']).model_dump()
 
 @app.get("/season/latest", tags=["Seasons", "Meta"], response_model=SeasonLatestResponse)
-async def get_latest_season(req: Request):
+async def get_latest_season(req: Request) -> dict:
     query = '''
         SELECT id, short_name, display_name, start_date, end_date FROM seasons WHERE '%s' BETWEEN start_date AND end_date
     ''' % (datetime.now().isoformat())
@@ -421,28 +421,29 @@ async def get_elo_changes(req: Request) -> dict:
 
 @app.get("/matches", tags=["Matches"])
 @app.get("/matches/{limit}", tags=["Matches"])
-async def get_matches(req: Request, limit: int = None) -> dict:
+async def get_matches(req: Request, limit: int = -1) -> dict:
     try:
-        if limit < 1:
-            limit = 1
+        if limit < 0:
+            limit = None
     except:
         limit = 0
+    print(type(limit) == int)
     query = f'''
         SELECT * FROM matches_vw 
-        {"LIMIT" if int(limit) else ''} {int(limit) if int(limit) else ''}
+        {"LIMIT" if type(limit) == int else ''} {int(limit) if type(limit) == int else ''}
     '''
     return await err.safe_db_fetch_all(request=req, query=query)
 
 
-@app.get("/matches/{offset}/{limit}", tags=["Matches"])
-async def get_matches(req: Request, offset: int = 0, limit: int = 10) -> dict:
-    if limit < 1:
+@app.get("/matches/{limit}/{offset}", tags=["Matches"])
+async def get_matches(req: Request, offset: int = 0, limit: int = -1) -> dict:
+    if limit < -1:
         limit = 1
     if offset < 0:
         offset = 0
     query = f'''
         SELECT * FROM matches_vw 
-        LIMIT {limit} 
+        {"LIMIT" if type(limit) == int else ''} {int(limit) if type(limit) == int else ''}
         OFFSET {offset}
     '''
     return await err.safe_db_fetch_all(request=req, query=query)
@@ -482,7 +483,26 @@ async def get_match_exists(req: Request, match_number: int = 0):
     ''' % (match_number, season)
     print(query)
     return await err.safe_db_fetch_one(request=req, query=query)
-    
+
+@app.get("/matches-by-season", tags=["Matches"])
+@app.get("/matches-by-season/{limit}", tags=["Matches"])
+async def get_match_for_current_season(req: Request, limit: int = 20):
+    season = await get_latest_season(req)
+    if not season:
+        return err.ErrorResponse(message="Latest Season Not Found", error_code=404)
+    query = '''
+        SELECT
+            *
+        FROM
+            matches_vw m
+        WHERE 
+            m.season_id = %s
+        LIMIT %s
+    ''' % (int(season['data']['id']), limit)
+    print(query)
+    return await err.safe_db_fetch_all(request=req, query=query)
+
+
 @app.get("/match_forfeits", tags=["Matches"])
 async def get_match_forfeits(req: Request) -> dict:
     query = '''
