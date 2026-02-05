@@ -719,6 +719,31 @@ async def get_elo_changes(req: Request, match_number: int = 10) -> dict:
     '''
     return await err.safe_db_fetch_one(request=req, query=query)
 
+@app.get("/best-wins", tags=["Charts"])
+async def get_best_wins(req: Request) -> dict:
+    current_season = get_latest_season(req)
+    query = """
+        SELECT 
+            id,
+            ranked_game_number,
+            elo_rank_old,
+            elo_rank_new,
+            elo_change,
+            total_wins,
+            win_streak_value,
+            opponent_elo,
+            season_id,
+            season_display_name
+        FROM
+            matches_vw
+        WHERE
+                match_win = 1
+            AND ranked_placement_match = 0
+            AND ranked_postplacement_match = 0
+        ORDER BY opponent_elo DESC
+        LIMIT 10
+    """
+    return await err.safe_db_fetch_all(request=req, query=query)
 
 @app.get("/final-move-stats", tags=["Charts"])
 async def get_final_move_stats(req: Request) -> dict:
