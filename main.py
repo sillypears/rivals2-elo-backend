@@ -43,6 +43,11 @@ from models.responses.moves import (
     SingleMoveResponse
 )
 
+from models.responses.meta import (
+    BestWins,
+    BestWinsListResponse
+)
+
 load_dotenv()
 ALLOWED_UPDATE_COLUMNS = {
     'match_date', 'elo_rank_old', 'elo_rank_new', 'elo_change', 'match_win',
@@ -719,13 +724,15 @@ async def get_elo_changes(req: Request, match_number: int = 10) -> dict:
     '''
     return await err.safe_db_fetch_one(request=req, query=query)
 
-@app.get("/best-wins", tags=["Charts"])
-async def get_best_wins(req: Request) -> dict:
+@app.get("/best-wins", tags=["Charts"], response_model=BestWinsListResponse)
+@app.get("/best-wins/{limit}", tags=["Charts"], response_model=BestWinsListResponse)
+async def get_best_wins(req: Request, limit: int = 10) -> dict:
     current_season = get_latest_season(req)
     query = """
         SELECT 
             id,
             ranked_game_number,
+            match_date,
             elo_rank_old,
             elo_rank_new,
             elo_change,
@@ -741,8 +748,8 @@ async def get_best_wins(req: Request) -> dict:
             AND ranked_placement_match = 0
             AND ranked_postplacement_match = 0
         ORDER BY opponent_elo DESC
-        LIMIT 10
-    """
+        LIMIT %s
+    """ % (limit)
     return await err.safe_db_fetch_all(request=req, query=query)
 
 @app.get("/final-move-stats", tags=["Charts"])
