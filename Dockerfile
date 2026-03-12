@@ -9,4 +9,4 @@ COPY requirements.txt .
 RUN uv pip install --system --no-cache -r requirements.txt
 COPY . .
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8005", "--workers", "4"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8005", "--workers", "1"]
