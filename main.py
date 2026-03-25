@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, HTTPException, status
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, HTTPException, status, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from utils.match import Match
 import asyncio
 import json
-from typing import Any, List, Dict, Set
+from typing import Any, List, Dict, Set, Optional
 from pydantic import TypeAdapter, BaseModel, Field
 import utils.errors as err
 from datetime import datetime
@@ -491,22 +491,34 @@ async def get_match_exists(req: Request, match_number: int = 0):
 
 @app.get("/matches-by-season", tags=["Matches"])
 @app.get("/matches-by-season/{limit}", tags=["Matches"])
-async def get_match_for_current_season(req: Request, limit: int = 20):
-    season = await get_latest_season(req)
-    if not season:
-        return err.ErrorResponse(message="Latest Season Not Found", error_code=404)
-    query = '''
-        SELECT
-            *
-        FROM
-            matches_vw m
-        WHERE 
-            m.season_id = %s
-        LIMIT %s
-    ''' % (int(season['data']['id']), limit)
-    print(query)
-    return await err.safe_db_fetch_all(request=req, query=query)
+async def get_match_for_current_season(req: Request, limit: Optional[int] = None, season_id: int = Query(-1, ge=-1)):
+    if season_id < 0:
+        season = await get_latest_season(req)
+    else:
+        season = await get_season_by_id(req, season_id)
 
+    if not season or not season.get('data'):
+        return err.ErrorResponse(message="Season Not Found", error_code=404)
+
+    season_id_value = int(season['data']['id'])
+
+    # Build query dynamically
+    if limit is not None and limit > 0:
+        query = '''
+            SELECT *
+            FROM matches_vw m
+            WHERE m.season_id = %s
+            LIMIT %s
+        '''
+        params = (season_id_value, limit)
+    else:
+        query = '''
+            SELECT *
+            FROM matches_vw m
+            WHERE m.season_id = %s
+        '''
+        params = (season_id_value,)
+    return await err.safe_db_fetch_all(request=req, query=query, params=params)
 
 @app.get("/match_forfeits", tags=["Matches"])
 async def get_match_forfeits(req: Request) -> dict:
