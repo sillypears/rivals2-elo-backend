@@ -12,6 +12,7 @@ from typing import Any, List, Dict, Set, Optional
 from pydantic import TypeAdapter, BaseModel, Field
 import utils.errors as err
 from datetime import datetime
+import requests
 
 # response model imports
 
@@ -1403,6 +1404,22 @@ async def delete_season(req: Request, id: int) -> dict:
     '''
     await notify_websockets({"type": "new_match"})
     return await err.safe_db_fetch_one(request=req, query=query)
+
+# misc
+
+@app.get("/players-playing", tags=["Misc"])
+async def get_players_playing(req: Request):
+    try:
+        res = requests.get("https://api.steampowered.com/ISteamUserStats/GetNumberOfCurrentPlayers/v1/?appid=2217000")
+        res.raise_for_status()
+        if res.status_code == 200:
+            data = res.json()
+            return err.SuccessResponse(data=data["response"])
+    except HTTPException as h_e:
+        return await err.ErrorResponse(data={msg: "Failed to gather"})
+    except Exception as e:
+        print(res.status_code)
+        return await err.ErrorResponse(data=[])
 
 # websockets
 
