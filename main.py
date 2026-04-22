@@ -1,5 +1,13 @@
 import os
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, HTTPException, status, Query
+from fastapi import (
+    FastAPI,
+    WebSocket,
+    WebSocketDisconnect,
+    Request,
+    HTTPException,
+    status,
+    Query,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
@@ -16,49 +24,57 @@ import requests
 
 # response model imports
 
-from models.responses import (
-    ApiResponse
-)
+from models.responses import ApiResponse
 
 from models.responses.seasons import (
     Seasons,
     SeasonLatestResponse,
     SeasonListResponse,
-    SingleSeasonResponse
+    SingleSeasonResponse,
 )
 
-from models.responses.season import (
-    Season,
-    SeasonResponse
-)
+from models.responses.season import Season, SeasonResponse
 
 from models.responses.characters import (
     Character,
     CharactersListResponse,
-    SingleCharacterResponse
+    SingleCharacterResponse,
 )
 
-from models.responses.moves import (
-    Move,
-    MovesListResponse,
-    SingleMoveResponse
-)
+from models.responses.moves import Move, MovesListResponse, SingleMoveResponse
 
-from models.responses.meta import (
-    BestWins,
-    BestWinsListResponse
-)
+from models.responses.meta import BestWins, BestWinsListResponse
 
 load_dotenv()
 ALLOWED_UPDATE_COLUMNS = {
-    'match_date', 'elo_rank_old', 'elo_rank_new', 'elo_change', 'match_win',
-    'match_forfeit', 'ranked_game_number', 'total_wins', 'win_streak_value',
-    'opponent_elo', 'opponent_estimated_elo', 'opponent_name',
-    'game_1_char_pick', 'game_1_opponent_pick', 'game_1_stage', 'game_1_winner',
-    'game_1_final_move_id', 'game_2_char_pick', 'game_2_opponent_pick',
-    'game_2_stage', 'game_2_winner', 'game_2_final_move_id', 'game_3_char_pick',
-    'game_3_opponent_pick', 'game_3_stage', 'game_3_winner', 'game_3_final_move_id',
-    'final_move_id'
+    "match_date",
+    "elo_rank_old",
+    "elo_rank_new",
+    "elo_change",
+    "match_win",
+    "match_forfeit",
+    "ranked_game_number",
+    "total_wins",
+    "win_streak_value",
+    "opponent_elo",
+    "opponent_estimated_elo",
+    "opponent_name",
+    "game_1_char_pick",
+    "game_1_opponent_pick",
+    "game_1_stage",
+    "game_1_winner",
+    "game_1_final_move_id",
+    "game_2_char_pick",
+    "game_2_opponent_pick",
+    "game_2_stage",
+    "game_2_winner",
+    "game_2_final_move_id",
+    "game_3_char_pick",
+    "game_3_opponent_pick",
+    "game_3_stage",
+    "game_3_winner",
+    "game_3_final_move_id",
+    "final_move_id",
 }
 
 
@@ -74,8 +90,9 @@ async def lifespan(app: FastAPI) -> Any:
         host=os.environ.get("DB_HOST"),
         user=os.environ.get("DB_USER"),
         password=os.environ.get("DB_PASS"),
-        db=os.environ.get("DDB_SCHEMA") if os.environ.get(
-            "DEBUG") else os.environ.get("DB_SCHEMA"),
+        db=os.environ.get("DDB_SCHEMA")
+        if os.environ.get("DEBUG")
+        else os.environ.get("DB_SCHEMA"),
         autocommit=True,
     )
     app.state.db_pool = pool
@@ -86,7 +103,9 @@ async def lifespan(app: FastAPI) -> Any:
         await pool.wait_closed()
 
 
-async def db_fetch_all(request: Request, query: str, params: tuple = ()) -> Dict[str, Any]:
+async def db_fetch_all(
+    request: Request, query: str, params: tuple = ()
+) -> Dict[str, Any]:
     async with request.app.state.db_pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
             await cur.execute(query, params)
@@ -96,7 +115,9 @@ async def db_fetch_all(request: Request, query: str, params: tuple = ()) -> Dict
             return err.SuccessResponse(data=rows)
 
 
-async def db_fetch_one(request: Request, query: str, params: tuple = ()) -> Dict[str, Any]:
+async def db_fetch_one(
+    request: Request, query: str, params: tuple = ()
+) -> Dict[str, Any]:
     async with request.app.state.db_pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
             await cur.execute(query, params)
@@ -105,17 +126,19 @@ async def db_fetch_one(request: Request, query: str, params: tuple = ()) -> Dict
                 return err.ErrorResponse(data=[])
             return err.SuccessResponse(data=rows)
 
+
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:8006", 
+        "http://localhost:8006",
         "http://localhost:8007",
         "http://192.168.1.55:8007",
-        "http://192.168.1.30:8006", 
-        "http://192.168.1.30:8007", 
-        "http://r2f.podme.local", 
-        "https://r2f.podme.local"],
+        "http://192.168.1.30:8006",
+        "http://192.168.1.30:8007",
+        "http://r2f.podme.local",
+        "https://r2f.podme.local",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -141,7 +164,8 @@ async def database_exception_handler(request, exc):
 
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon() -> FileResponse:
-    return FileResponse('favicon.ico')
+    return FileResponse("favicon.ico")
+
 
 async def check_database(req: Request):
     try:
@@ -153,39 +177,80 @@ async def check_database(req: Request):
     except Exception as e:
         return {"status": "unhealthy", "message": str(e)}
 
+
+@app.get("/database-schema", tags=["Meta"])
+async def get_database_schema(req: Request) -> dict:
+    query = """
+        SELECT table_name, table_type 
+        FROM information_schema.tables 
+        WHERE table_schema = DATABASE()
+        ORDER BY table_name
+    """
+    tables_result = await err.safe_db_fetch_all(request=req, query=query)
+    if tables_result["status"] != "SUCCESS":
+        return tables_result
+
+    schema = {}
+    for table in tables_result["data"]:
+        table_name = table["table_name"]
+        columns_query = """
+            SELECT 
+                column_name, 
+                data_type, 
+                is_nullable, 
+                column_default,
+                character_maximum_length,
+                numeric_precision,
+                numeric_scale,
+                column_key
+            FROM information_schema.columns 
+            WHERE table_schema = DATABASE() AND table_name = %s
+            ORDER BY ordinal_position
+        """
+        columns_result = await err.safe_db_fetch_all(
+            request=req, query=columns_query, params=(table_name,)
+        )
+        schema[table_name] = {
+            "table_type": table["table_type"],
+            "columns": columns_result["data"]
+            if columns_result["status"] == "SUCCESS"
+            else [],
+        }
+
+    return err.SuccessResponse(data=schema).model_dump()
+
+
 @app.get("/healthcheck", tags=["Health"])
 async def health_check(req: Request) -> dict:
     db_status = await check_database(req)
-   
+
     if db_status["status"] == "unhealthy":
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail={
                 "timestamp": datetime.now().isoformat(),
                 "status": "unhealthy",
-                "details": {
-                    "database": db_status
-                }
-            }
+                "details": {"database": db_status},
+            },
         )
-    
+
     return {
         "timestamp": datetime.now().isoformat(),
         "status": "healthy",
-        "details": {
-            "database": db_status
-        }
+        "details": {"database": db_status},
     }
 
+
 @app.get(
-    "/characters", 
+    "/characters",
     summary="Character List",
     description="This returns a list of all characters currently in the database",
     status_code=status.HTTP_200_OK,
-    tags=["Characters", "Meta"], 
-    response_model=CharactersListResponse)
+    tags=["Characters", "Meta"],
+    response_model=CharactersListResponse,
+)
 async def get_characters(req: Request) -> Dict[str, Any]:
-    query = '''
+    query = """
         SELECT
             id,
             character_name,
@@ -194,12 +259,13 @@ async def get_characters(req: Request) -> Dict[str, Any]:
             list_order
         FROM
             characters
-    '''
+    """
     return await err.safe_db_fetch_all(request=req, query=query)
+
 
 @app.get("/movelist", tags=["Moves", "Meta"], response_model=MovesListResponse)
 async def get_movelist(req: Request) -> dict:
-    query = '''
+    query = """
         SELECT 
             id,
             short_name,
@@ -208,12 +274,13 @@ async def get_movelist(req: Request) -> dict:
             list_order
         FROM
             moves
-    '''
+    """
     return await err.safe_db_fetch_all(request=req, query=query)
+
 
 @app.get("/movelist/top", tags=["Moves", "Meta"])
 async def get_movelist(req: Request) -> dict:
-    query = '''
+    query = """
         SELECT
             final_move_id,
             final_move_name,
@@ -246,21 +313,22 @@ async def get_movelist(req: Request) -> dict:
         ORDER BY
             usage_count DESC
         LIMIT 5;
-    '''
+    """
     return await err.safe_db_fetch_all(request=req, query=query)
-    
+
+
 @app.get("/stages", tags=["Stages", "Meta"])
 async def get_characters(req: Request) -> dict:
-    query = '''
+    query = """
         SELECT * FROM stages
-    '''
+    """
     return await err.safe_db_fetch_all(request=req, query=query)
 
 
 @app.get("/seasons", tags=["Seasons", "Meta"], response_model=SeasonListResponse)
 async def get_seasons(req: Request) -> dict:
     latest_season = await get_latest_season(req)
-    query = f'''
+    query = f"""
         SELECT 
             id,
             start_date, 
@@ -270,18 +338,21 @@ async def get_seasons(req: Request) -> dict:
             season_index,
             steam_leaderboard
         FROM seasons
-    '''
+    """
     seasons = await err.safe_db_fetch_all(request=req, query=query)
     updated_seasons = [
-        {**season, 'latest': True} if season['id'] == latest_season['data']['id'] else {**season, 'latest': False}
-        for season in seasons['data']
+        {**season, "latest": True}
+        if season["id"] == latest_season["data"]["id"]
+        else {**season, "latest": False}
+        for season in seasons["data"]
     ]
     return err.SuccessResponse(data=updated_seasons).model_dump()
+
 
 @app.get("/season/id/{id}", tags=["Seasons"], response_model=SeasonResponse)
 async def get_season_by_id(req: Request, id: int):
     latest_season = await get_latest_season(req)
-    query = '''
+    query = """
         SELECT 
             id, 
             short_name, 
@@ -294,38 +365,40 @@ async def get_season_by_id(req: Request, id: int):
             seasons 
         WHERE 
             id = '%s'
-    ''' % (id)
+    """ % (id)
     season = await err.safe_db_fetch_one(request=req, query=query)
-    if season['data']['id'] == latest_season['data']['id']:
-        season['data']['latest'] = True 
+    if season["data"]["id"] == latest_season["data"]["id"]:
+        season["data"]["latest"] = True
     else:
-        season['data']['latest'] = False
-    
-    return err.SuccessResponse(data=season['data']).model_dump()
+        season["data"]["latest"] = False
 
-@app.get("/season/latest", tags=["Seasons", "Meta"], response_model=SeasonLatestResponse)
+    return err.SuccessResponse(data=season["data"]).model_dump()
+
+
+@app.get(
+    "/season/latest", tags=["Seasons", "Meta"], response_model=SeasonLatestResponse
+)
 async def get_latest_season(req: Request) -> dict:
-    query = '''
+    query = """
         SELECT id, short_name, display_name, start_date, end_date FROM seasons WHERE '%s' BETWEEN start_date AND end_date
-    ''' % (datetime.now().isoformat())
+    """ % (datetime.now().isoformat())
     return await err.safe_db_fetch_one(request=req, query=query)
 
 
 @app.get("/ranked_tiers", tags=["Ranked", "Meta"])
 async def get_ranked_tier_list(req: Request) -> dict:
-
-    query = f'''
+    query = f"""
         SELECT 
             *
         FROM tiers
-    '''
+    """
     return await err.safe_db_fetch_all(request=req, query=query)
 
 
 @app.get("/opponent_names", tags=["Ranked", "Meta"])
 async def get_opponent_name_list(req: Request):
     try:
-        query = f'''
+        query = f"""
             SELECT 
                 DISTINCT(opponent_name),
                 COUNT(opponent_name) as count
@@ -336,21 +409,22 @@ async def get_opponent_name_list(req: Request):
             GROUP BY opponent_name
             ORDER BY opponent_name ASC
   
-        '''
+        """
         opponent_list = await err.safe_db_fetch_all(request=req, query=query)
 
         data = {
-            'names': [x['opponent_name'] for x in opponent_list['data']],
-            'counts': {x['opponent_name']: x['count'] for x in opponent_list['data']}
+            "names": [x["opponent_name"] for x in opponent_list["data"]],
+            "counts": {x["opponent_name"]: x["count"] for x in opponent_list["data"]},
         }
         return err.SuccessResponse(data=data)
     except Exception as e:
         return err.ErrorResponse(message=f"Could not get opponent_list: {e}")
 
+
 @app.get("/opponent_count", tags=["Ranked", "Meta"])
 async def get_opponent_counts(req: Request):
     try:
-        query = f'''
+        query = f"""
             SELECT 
                 COUNT(DISTINCT(opponent_name)) as total_unique_opponents,
                 COUNT(opponent_name) as matches_with_opponent_name
@@ -358,19 +432,18 @@ async def get_opponent_counts(req: Request):
                 matches_vw
             WHERE
                 opponent_name <> ''
-        '''
+        """
         return await err.safe_db_fetch_all(request=req, query=query)
 
     except Exception as e:
         return err.ErrorResponse(message=f"Could not get opponent_list: {e}")
 
 
-    
 @app.get("/current_tier", tags=["Performance"])
 async def get_current_tier(req: Request) -> dict:
     try:
         tiers = await get_ranked_tier_list(req)
-        query = f'''
+        query = f"""
             SELECT
                 elo_rank_new,
                 ranked_game_number,
@@ -380,27 +453,28 @@ async def get_current_tier(req: Request) -> dict:
                 matches_vw
             ORDER BY match_date DESC, id DESC
             LIMIT 1
-        '''
+        """
         elo_raw = await err.safe_db_fetch_one(request=req, query=query)
-        elo = int(elo_raw['data']['elo_rank_new'])
-        game_no = elo_raw['data']['ranked_game_number']
+        elo = int(elo_raw["data"]["elo_rank_new"])
+        game_no = elo_raw["data"]["ranked_game_number"]
         current_tier = {
             "current_elo": elo,
             "tier": "",
             "tier_short": "",
             "last_game_number": int(game_no),
-            "win_streak_value": int(elo_raw['data']['win_streak_value']),
-            "total_wins": int(elo_raw['data']['total_wins'])
+            "win_streak_value": int(elo_raw["data"]["win_streak_value"]),
+            "total_wins": int(elo_raw["data"]["total_wins"]),
         }
-        for tier in tiers['data']:
-            if elo > int(tier['min_threshold']) and elo < int(tier['max_threshold']):
-                current_tier['tier'] = tier['tier_display_name']
-                current_tier['tier_short'] = tier['tier_short_name']
+        for tier in tiers["data"]:
+            if elo > int(tier["min_threshold"]) and elo < int(tier["max_threshold"]):
+                current_tier["tier"] = tier["tier_display_name"]
+                current_tier["tier_short"] = tier["tier_short_name"]
         return err.SuccessResponse(data=current_tier).model_dump()
 
     except Exception as e:
         print(f"eeee: {e}")
         return err.ErrorResponse(message=str(e))
+
 
 @app.get("/elo-swing", tags=["Performance"])
 async def get_elo_changes(req: Request) -> dict:
@@ -425,6 +499,7 @@ async def get_elo_changes(req: Request) -> dict:
     """
     return await err.safe_db_fetch_all(request=req, query=query)
 
+
 @app.get("/matches", tags=["Matches"])
 @app.get("/matches/{limit}", tags=["Matches"])
 async def get_matches(req: Request, limit: int = -1) -> dict:
@@ -434,10 +509,10 @@ async def get_matches(req: Request, limit: int = -1) -> dict:
     except:
         limit = 0
     print(type(limit) == int)
-    query = f'''
+    query = f"""
         SELECT * FROM matches_vw 
-        {"LIMIT" if type(limit) == int else ''} {int(limit) if type(limit) == int else ''}
-    '''
+        {"LIMIT" if type(limit) == int else ""} {int(limit) if type(limit) == int else ""}
+    """
     return await err.safe_db_fetch_all(request=req, query=query)
 
 
@@ -447,11 +522,11 @@ async def get_matches(req: Request, offset: int = 0, limit: int = -1) -> dict:
         limit = 1
     if offset < 0:
         offset = 0
-    query = f'''
+    query = f"""
         SELECT * FROM matches_vw 
-        {"LIMIT" if type(limit) == int else ''} {int(limit) if type(limit) == int else ''}
+        {"LIMIT" if type(limit) == int else ""} {int(limit) if type(limit) == int else ""}
         OFFSET {offset}
-    '''
+    """
     return await err.safe_db_fetch_all(request=req, query=query)
 
 
@@ -461,17 +536,18 @@ async def get_match(req: Request, id: int = -1) -> dict:
     if id < 1:
         try:
             data = await get_latest_match_id(req)
-            id = data['data']['latest_id']
+            id = data["data"]["latest_id"]
         except:
             id = 1
-    query = f'''
+    query = f"""
         SELECT 
             *
         FROM
             matches_vw
         WHERE id = {int(id)}
-    '''
+    """
     return await err.safe_db_fetch_one(request=req, query=query)
+
 
 @app.get("/match-exists", tags=["Matches"])
 async def get_match_exists(req: Request, match_number: int = 0):
@@ -480,50 +556,54 @@ async def get_match_exists(req: Request, match_number: int = 0):
         return err.ErrorResponse(message="Not Found", error_code=204)
     if season == "":
         s = await get_latest_season(req)
-        if s['status'] == "SUCCESS":
-            season = s['data']['id']
+        if s["status"] == "SUCCESS":
+            season = s["data"]["id"]
         else:
             season = -1
-    query = '''
+    query = """
         SELECT m.id FROM matches_vw m LEFT JOIN seasons s ON m.season_id = s.id WHERE ranked_game_number = %s AND m.season_id = '%s'
-    ''' % (match_number, season)
+    """ % (match_number, season)
     print(query)
     return await err.safe_db_fetch_one(request=req, query=query)
 
+
 @app.get("/matches-by-season", tags=["Matches"])
 @app.get("/matches-by-season/{limit}", tags=["Matches"])
-async def get_match_for_current_season(req: Request, limit: Optional[int] = None, season_id: int = Query(-1, ge=-1)):
+async def get_match_for_current_season(
+    req: Request, limit: Optional[int] = None, season_id: int = Query(-1, ge=-1)
+):
     if season_id < 0:
         season = await get_latest_season(req)
     else:
         season = await get_season_by_id(req, season_id)
 
-    if not season or not season.get('data'):
+    if not season or not season.get("data"):
         return err.ErrorResponse(message="Season Not Found", error_code=404)
 
-    season_id_value = int(season['data']['id'])
+    season_id_value = int(season["data"]["id"])
 
     # Build query dynamically
     if limit is not None and limit > 0:
-        query = '''
+        query = """
             SELECT *
             FROM matches_vw m
             WHERE m.season_id = %s
             LIMIT %s
-        '''
+        """
         params = (season_id_value, limit)
     else:
-        query = '''
+        query = """
             SELECT *
             FROM matches_vw m
             WHERE m.season_id = %s
-        '''
+        """
         params = (season_id_value,)
     return await err.safe_db_fetch_all(request=req, query=query, params=params)
 
+
 @app.get("/match_forfeits", tags=["Matches"])
 async def get_match_forfeits(req: Request) -> dict:
-    query = '''
+    query = """
         SELECT 
             COUNT(match_win) AS forfeits
         FROM
@@ -531,33 +611,38 @@ async def get_match_forfeits(req: Request) -> dict:
         WHERE
             match_forfeit = 1
             AND match_win = 1
-    '''
+    """
     return await err.safe_db_fetch_one(request=req, query=query)
 
 
 @app.get("/stats", tags=["Charts"])
-async def get_stats(req: Request, limit: int = 10, skip: int = 0, match_win: bool = True) -> dict:
+async def get_stats(
+    req: Request, limit: int = 10, skip: int = 0, match_win: bool = True
+) -> dict:
     if limit < 1:
         limit = 10
     if skip < 0:
         skip = 0
-    query = f'''
+    query = f"""
         SELECT * FROM matches_vw
         WHERE match_win = {1 if match_win else 0} 
         ORDER BY ranked_game_number DESC 
         LIMIT {limit} 
         OFFSET {skip}
-    '''
+    """
     async with app.state.db_pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
             await cur.execute(query)
             rows = await cur.fetchall()
-            return {"status": "SUCCESS", "data": sorted(rows, key=lambda x: x['ranked_game_number'])}
+            return {
+                "status": "SUCCESS",
+                "data": sorted(rows, key=lambda x: x["ranked_game_number"]),
+            }
 
 
 @app.get("/char-stats", tags=["Charts"])
 async def get_char_stats(req: Request) -> dict:
-    query = '''
+    query = """
         SELECT
             opponent_pick,
             CAST(SUM(CASE WHEN game_winner = 1 THEN 1 ELSE 0 END) AS INTEGER) AS wins,
@@ -574,12 +659,13 @@ async def get_char_stats(req: Request) -> dict:
         WHERE opponent_pick NOT IN ('N/A', '') AND game_winner IN (1, 2)
         GROUP BY opponent_pick
         ORDER BY win_percentage DESC, total_games DESC;
-            '''
+            """
     return await err.safe_db_fetch_all(request=req, query=query)
+
 
 @app.get("/char-stats-picked", tags=["Charts"])
 async def get_chars_by_times_picked(req: Request):
-    query = '''
+    query = """
     SELECT opponent_pick_name, COUNT(*) AS times_played, season_display_name
     FROM (
         SELECT game_1_opponent_pick_name AS opponent_pick_name,
@@ -603,12 +689,13 @@ async def get_chars_by_times_picked(req: Request):
     ) AS all_picks
     GROUP BY opponent_pick_name, season_display_name
     ORDER BY times_played DESC;
-    '''
+    """
     return await err.safe_db_fetch_all(request=req, query=query)
+
 
 @app.get("/stage-stats", tags=["Charts"])
 async def get_stage_stats(req: Request) -> dict:
-    query = '''
+    query = """
         SELECT
             stage_name,
             SUM(CASE WHEN game_winner = 1 THEN 1 ELSE 0 END) AS wins,
@@ -625,14 +712,14 @@ async def get_stage_stats(req: Request) -> dict:
         WHERE stage_name NOT IN ('N/A', '') AND game_winner IN (1, 2)
         GROUP BY stage_name
         ORDER BY win_percentage DESC, total_games DESC;
-            '''
+            """
     return await err.safe_db_fetch_all(request=req, query=query)
 
 
 @app.get("/match-stats", tags=["Charts"])
 async def get_match_stats(req: Request) -> dict:
     season_raw = await get_seasons(req=req)
-    season = season_raw['data'][-1]['display_name']
+    season = season_raw["data"][-1]["display_name"]
     query = f''' 
         SELECT 
             game_count,
@@ -671,7 +758,7 @@ async def get_match_stats(req: Request) -> dict:
 
 @app.get("/match-stage-stats", tags=["Charts"])
 async def get_match_stage_stats(req: Request) -> dict:
-    query = '''
+    query = """
         SELECT 
         s.id,
         s.display_name AS stage_name,
@@ -695,7 +782,7 @@ async def get_match_stage_stats(req: Request) -> dict:
         GROUP BY s.id, s.display_name, pick_type
         ORDER BY times_picked DESC, s.display_name, pick_type;
 
-    '''
+    """
     return await err.safe_db_fetch_all(request=req, query=query)
 
 
@@ -704,7 +791,7 @@ async def get_match_stage_stats(req: Request) -> dict:
 async def get_elo_changes(req: Request, match_number: int = 10) -> dict:
     if match_number < 1:
         match_number = 1
-    query = f'''
+    query = f"""
         SELECT
         elo_change_plus,
         elo_change_minus,
@@ -734,8 +821,9 @@ async def get_elo_changes(req: Request, match_number: int = 10) -> dict:
             ), 0) AS elo_change_minus
         ) AS stats;
 
-    '''
+    """
     return await err.safe_db_fetch_one(request=req, query=query)
+
 
 @app.get("/best-wins", tags=["Charts"], response_model=BestWinsListResponse)
 @app.get("/best-wins/{limit}", tags=["Charts"], response_model=BestWinsListResponse)
@@ -765,9 +853,10 @@ async def get_best_wins(req: Request, limit: int = 10) -> dict:
     """ % (limit)
     return await err.safe_db_fetch_all(request=req, query=query)
 
+
 @app.get("/final-move-stats", tags=["Charts"])
 async def get_final_move_stats(req: Request) -> dict:
-    query = '''
+    query = """
         SELECT 
             final_move_short,
             final_move_name,
@@ -801,13 +890,13 @@ async def get_final_move_stats(req: Request) -> dict:
                     AND game_3_winner = 1) AS all_winnings
         GROUP BY final_move_name, season_display_name
         ORDER BY final_move_count DESC;
-    '''
+    """
     return await err.safe_db_fetch_all(request=req, query=query)
 
 
 @app.get("/all-seasons-stats", tags=["Charts"])
 async def get_all_seasons_stats(req: Request) -> dict:
-    query = '''
+    query = """
         SELECT
         season_display_name,
         COUNT(*) AS total_matches,
@@ -821,12 +910,13 @@ async def get_all_seasons_stats(req: Request) -> dict:
         GROUP BY season_display_name
         ORDER BY season_id DESC;
 
-    '''
+    """
     return await err.safe_db_fetch_all(request=req, query=query)
+
 
 @app.get("/elo-by-season", tags=["Charts"])
 async def get_elo_by_season(req: Request) -> dict:
-    query = '''
+    query = """
     SELECT 
         MIN(m.elo_rank_old) AS min_elo,
         CAST(ROUND(AVG(m.elo_rank_new)) AS INTEGER) AS avg_elo,
@@ -854,14 +944,16 @@ async def get_elo_by_season(req: Request) -> dict:
     WHERE
         m.season_id IS NOT NULL
     GROUP BY s.id , s.display_name
-    '''
+    """
     return await err.safe_db_fetch_all(request=req, query=query)
+
 
 @app.get("/head-to-head", tags=["Charts", "Matches"])
 async def get_head_to_head_by_user(req: Request, opp_name: str = ""):
-    if opp_name == "": return err.ErrorResponse(message="No user was given")
+    if opp_name == "":
+        return err.ErrorResponse(message="No user was given")
     all_data = {}
-    query = '''
+    query = """
     SELECT 
         COUNT(*) as total_matches,
         SUM(match_win) as matches_won,
@@ -875,14 +967,16 @@ async def get_head_to_head_by_user(req: Request, opp_name: str = ""):
         COUNT(CASE WHEN match_forfeit = 1 THEN 1 END) as forfeits
     FROM matches_vw
     WHERE LOWER(opponent_name) = LOWER('%s');
-    ''' % (opp_name)
+    """ % (opp_name)
     temp = await err.safe_db_fetch_one(request=req, query=query)
-    if temp['status'] == "SUCCESS":
-        all_data['overall'] = temp['data']
+    if temp["status"] == "SUCCESS":
+        all_data["overall"] = temp["data"]
     else:
-        return err.ErrorResponse(message="Something went wrong with the overall request").model_dump()
+        return err.ErrorResponse(
+            message="Something went wrong with the overall request"
+        ).model_dump()
 
-    query = '''
+    query = """
         SELECT 
             id,
             ranked_game_number,
@@ -921,14 +1015,16 @@ async def get_head_to_head_by_user(req: Request, opp_name: str = ""):
         FROM matches_vw
         WHERE LOWER(opponent_name) = LOWER('%s')
         ORDER BY match_date DESC;
-    ''' % (opp_name)
+    """ % (opp_name)
 
     temp = await err.safe_db_fetch_all(request=req, query=query)
-    if temp['status'] == "SUCCESS":
-        all_data['matches'] = temp['data']
+    if temp["status"] == "SUCCESS":
+        all_data["matches"] = temp["data"]
     else:
-        return err.ErrorResponse(message="Something went wrong with the matches request").model_dump()
-    query = '''
+        return err.ErrorResponse(
+            message="Something went wrong with the matches request"
+        ).model_dump()
+    query = """
         SELECT 
             stage_name,
             SUM(games_played) AS games_played,
@@ -966,14 +1062,16 @@ async def get_head_to_head_by_user(req: Request, opp_name: str = ""):
         GROUP BY stage_name
         ORDER BY games_played DESC, win_rate DESC;
         
-    ''' % {'opponent': opp_name}
+    """ % {"opponent": opp_name}
     temp = await err.safe_db_fetch_all(request=req, query=query)
-    if temp['status'] == "SUCCESS":
-        all_data['stages'] = temp['data']
+    if temp["status"] == "SUCCESS":
+        all_data["stages"] = temp["data"]
     else:
-        return err.ErrorResponse(message="Something went wrong with the stages request").model_dump()
+        return err.ErrorResponse(
+            message="Something went wrong with the stages request"
+        ).model_dump()
 
-    query = '''
+    query = """
         SELECT 
             your_character,
             opponent_character,
@@ -1021,20 +1119,23 @@ async def get_head_to_head_by_user(req: Request, opp_name: str = ""):
         GROUP BY your_character, opponent_character
         HAVING games_played > 0
         ORDER BY games_played DESC, win_rate DESC;
-    ''' % {'opponent': opp_name}
+    """ % {"opponent": opp_name}
     temp = await err.safe_db_fetch_all(request=req, query=query)
-    if temp['status'] == "SUCCESS":
-        all_data['matchup'] = temp['data']
+    if temp["status"] == "SUCCESS":
+        all_data["matchup"] = temp["data"]
     else:
-        return err.ErrorResponse(message="Something went wrong with the matchup request").model_dump()
+        return err.ErrorResponse(
+            message="Something went wrong with the matchup request"
+        ).model_dump()
 
     if all_data:
         return err.SuccessResponse(data=all_data).model_dump()
     return err.ErrorResponse(message="Something went wrong").model_dump()
 
+
 @app.get("/head-to-head/top", tags=["Charts", "Matches"])
 async def get_top_matchups_by_name(req: Request):
-    query = '''
+    query = """
     SELECT
         m.opponent_name,
         count(m.opponent_name) as count
@@ -1046,12 +1147,13 @@ async def get_top_matchups_by_name(req: Request):
     GROUP BY
         m.opponent_name
     ORDER BY count DESC, m.opponent_name ASC
-    '''
+    """
     return await err.safe_db_fetch_all(request=req, query=query)
+
 
 @app.get("/heatmap-data", tags=["Charts"])
 async def get_data_for_heatmap(req: Request):
-    query = '''
+    query = """
         SELECT 
             season_id,
             season_display_name,
@@ -1076,12 +1178,13 @@ async def get_data_for_heatmap(req: Request):
         ) AS picks
         GROUP BY season_id, season_display_name, char_name
         ORDER BY season_id DESC, pick_count DESC;
-    '''
+    """
     return await err.safe_db_fetch_all(request=req, query=query)
+
 
 @app.get("/stagepick-data", tags=["Charts"])
 async def get_data_for_stageheatmap(req: Request):
-    query = '''
+    query = """
         WITH stage_data AS (
         SELECT 
             season_id,
@@ -1126,13 +1229,14 @@ async def get_data_for_stageheatmap(req: Request):
         FROM stage_data
         GROUP BY  season_display_name, stage_id, stage_name
         ORDER BY pick_count DESC;
-    '''
+    """
 
     return await err.safe_db_fetch_all(request=req, query=query)
 
+
 @app.get("/character-mu-data", tags=["Charts"])
 async def get_character_matchup_data(req: Request):
-    query = '''
+    query = """
     WITH individual_games AS (
         SELECT 
             m.season_display_name,
@@ -1215,12 +1319,13 @@ async def get_character_matchup_data(req: Request):
         t.id ASC,
         win_percentage DESC,
         total_games DESC;
-    '''
+    """
     return await err.safe_db_fetch_all(request=req, query=query)
+
 
 @app.get("/game_duration", tags=["Matches", "Time"])
 async def get_game_duration(req: Request) -> dict:
-    query = '''
+    query = """
     SELECT 
         ROUND(AVG(duration), 0) AS avg_game_duration
     FROM (
@@ -1230,12 +1335,13 @@ async def get_game_duration(req: Request) -> dict:
         UNION ALL
         SELECT game_3_duration FROM matches_vw WHERE game_3_duration > 0
     ) AS durations;
-    '''
+    """
     return await err.safe_db_fetch_all(request=req, query=query)
+
 
 @app.get("/game_duration/season", tags=["Matches", "Time"])
 async def get_game_duration_by_season(req: Request) -> dict:
-    query = '''
+    query = """
     SELECT 
         season_id,
         season_display_name,
@@ -1249,12 +1355,13 @@ async def get_game_duration_by_season(req: Request) -> dict:
     ) AS durations
     GROUP BY season_id, season_display_name
     ORDER BY season_id;
-    '''
+    """
     return await err.safe_db_fetch_all(request=req, query=query)
+
 
 @app.get("/game_duration/opponent", tags=["Matches", "Time"])
 async def get_game_duration_by_opponent(req: Request) -> dict:
-    query = '''
+    query = """
     SELECT 
         opponent_char AS opponent_character,
         ROUND(AVG(duration), 0) AS avg_game_duration,
@@ -1278,13 +1385,14 @@ async def get_game_duration_by_opponent(req: Request) -> dict:
     ) AS durations
     GROUP BY opponent_char
     ORDER BY avg_game_duration DESC;
-    '''
+    """
     return await err.safe_db_fetch_all(request=req, query=query)
+
 
 # post
 @app.post("/insert-match", tags=["Matches", "Mutable"])
 async def insert_match(match: Match, debug: bool = 0) -> dict:
-    query = '''
+    query = """
         INSERT INTO matches (
             match_date, elo_rank_old, elo_rank_new, elo_change, match_win, match_forfeit,
             ranked_game_number, total_wins, win_streak_value, opponent_elo, opponent_estimated_elo, opponent_name,
@@ -1300,29 +1408,77 @@ async def insert_match(match: Match, debug: bool = 0) -> dict:
             %s, %s, %s, %s, %s, %s, 
             %s
         )
-    '''
+    """
     inserted_id = -1
     async with app.state.db_pool.acquire() as conn:
         async with conn.cursor() as cur:
             try:
-                await cur.execute(query, (
-                    match.match_date,
-                    match.elo_rank_old, match.elo_rank_new, match.elo_change, match.match_win, match.match_forfeit,
-                    match.ranked_game_number, match.total_wins, match.win_streak_value, match.opponent_elo, match.opponent_estimated_elo, match.opponent_name,
-                    match.game_1_char_pick, match.game_1_opponent_pick, match.game_1_stage, match.game_1_winner, match.game_1_final_move_id, match.game_1_duration,
-                    match.game_2_char_pick, match.game_2_opponent_pick, match.game_2_stage, match.game_2_winner, match.game_2_final_move_id, match.game_2_duration, 
-                    match.game_3_char_pick, match.game_3_opponent_pick, match.game_3_stage, match.game_3_winner, match.game_3_final_move_id, match.game_3_duration,
-                    match.final_move_id
-                ))
+                await cur.execute(
+                    query,
+                    (
+                        match.match_date,
+                        match.elo_rank_old,
+                        match.elo_rank_new,
+                        match.elo_change,
+                        match.match_win,
+                        match.match_forfeit,
+                        match.ranked_game_number,
+                        match.total_wins,
+                        match.win_streak_value,
+                        match.opponent_elo,
+                        match.opponent_estimated_elo,
+                        match.opponent_name,
+                        match.game_1_char_pick,
+                        match.game_1_opponent_pick,
+                        match.game_1_stage,
+                        match.game_1_winner,
+                        match.game_1_final_move_id,
+                        match.game_1_duration,
+                        match.game_2_char_pick,
+                        match.game_2_opponent_pick,
+                        match.game_2_stage,
+                        match.game_2_winner,
+                        match.game_2_final_move_id,
+                        match.game_2_duration,
+                        match.game_3_char_pick,
+                        match.game_3_opponent_pick,
+                        match.game_3_stage,
+                        match.game_3_winner,
+                        match.game_3_final_move_id,
+                        match.game_3_duration,
+                        match.final_move_id,
+                    ),
+                )
             except Exception as e:
                 return err.ErrorResponse(message=f"{e}").model_dump()
             try:
-                await notify_websockets(message={"user": "backend", "type": "new_match", "ranked_game_number": int(match.ranked_game_number)})
-                print("""Sending: {"user": "backend", "type": "new_match", "ranked_game_number": %i }""" % (int(match.ranked_game_number)))
+                await notify_websockets(
+                    message={
+                        "user": "backend",
+                        "type": "new_match",
+                        "ranked_game_number": int(match.ranked_game_number),
+                    }
+                )
+                print(
+                    """Sending: {"user": "backend", "type": "new_match", "ranked_game_number": %i }"""
+                    % (int(match.ranked_game_number))
+                )
                 if match.match_win == 1:
-                    await notify_websockets(message={"user": "backend", "type": "new_win_stats", "ranked_game_number": int(match.ranked_game_number)})
+                    await notify_websockets(
+                        message={
+                            "user": "backend",
+                            "type": "new_win_stats",
+                            "ranked_game_number": int(match.ranked_game_number),
+                        }
+                    )
                 elif match.match_win == 0:
-                    await notify_websockets(message={"user": "backend", "type": "new_lose_stats", "ranked_game_number": int(match.ranked_game_number)})
+                    await notify_websockets(
+                        message={
+                            "user": "backend",
+                            "type": "new_lose_stats",
+                            "ranked_game_number": int(match.ranked_game_number),
+                        }
+                    )
                 inserted_id = cur.lastrowid
                 match.match_id = inserted_id
             except Exception as e:
@@ -1330,87 +1486,98 @@ async def insert_match(match: Match, debug: bool = 0) -> dict:
                 return err.ErrorResponse(message=f"{e}").model_dump()
     return err.SuccessResponse(data=match).model_dump()
 
+
 # patch
+
 
 @app.patch(
     "/update-match/",
     responses={
         200: {"description": "Successful patch"},
-        422: {"description": "Validation error - please correct data"}
+        422: {"description": "Validation error - please correct data"},
     },
-    tags=["Mutable"])
+    tags=["Mutable"],
+)
 async def update_match(update_value: dict) -> dict:
     try:
-        match_id = int(update_value['row_id'])
+        match_id = int(update_value["row_id"])
     except (ValueError, KeyError):
         return {"status": "failure", "message": "No ID provided or invalid ID format"}
     if match_id:
         print(
-            f"""UPDATE matches SET {update_value['key']}="{update_value['value']}" WHERE id = {match_id}""")
+            f"""UPDATE matches SET {update_value["key"]}="{update_value["value"]}" WHERE id = {match_id}"""
+        )
         async with app.state.db_pool.acquire() as conn:
             async with conn.cursor(aiomysql.DictCursor) as cur:
-                await cur.execute(f"""UPDATE matches SET {update_value['key']}="{update_value['value']}" WHERE id = {match_id}""")
+                await cur.execute(
+                    f"""UPDATE matches SET {update_value["key"]}="{update_value["value"]}" WHERE id = {match_id}"""
+                )
                 rows = await cur.fetchall()
                 return err.SuccessResponse(data=rows, message="hi").model_dump()
     return err.SuccessResponse(data={}).model_dump()
 
+
 @app.patch(
-    "/season/id/{id}", 
+    "/season/id/{id}",
     responses={
         200: {"description": "Successful patch"},
-        422: {"description": "Validation error - please correct data"}
+        422: {"description": "Validation error - please correct data"},
     },
-    tags=["Seasons", "Mutable"])
+    tags=["Seasons", "Mutable"],
+)
 async def update_season(update_value: dict) -> dict:
     try:
-        season_id = int(update_value['row_id'])
+        season_id = int(update_value["row_id"])
     except (ValueError, KeyError):
         return {"status": "failure", "message": "No ID provided or invalid ID format"}
     if season_id:
         print(
-            f"""UPDATE matches SET {update_value['key']}="{update_value['value']}" WHERE id = {season_id}""")
+            f"""UPDATE matches SET {update_value["key"]}="{update_value["value"]}" WHERE id = {season_id}"""
+        )
         async with app.state.db_pool.acquire() as conn:
             async with conn.cursor(aiomysql.DictCursor) as cur:
-                await cur.execute(f"""UPDATE matches SET {update_value['key']}="{update_value['value']}" WHERE id = {season_id}""")
+                await cur.execute(
+                    f"""UPDATE matches SET {update_value["key"]}="{update_value["value"]}" WHERE id = {season_id}"""
+                )
                 rows = await cur.fetchall()
                 return err.SuccessResponse(data=rows, message="hi").model_dump()
     return err.SuccessResponse(data={}).model_dump()
 
+
 # delete
 
 
-@app.delete(
-    "/match/id/{id}", 
-    tags=["Matches", 
-    "Mutable"])
+@app.delete("/match/id/{id}", tags=["Matches", "Mutable"])
 async def delete_match(req: Request, id: int) -> dict:
     if type(id) != int:
         return {"status": "FAIL", "data": {"message": "Invalid match ID"}}
-    query = f'''
+    query = f"""
         DELETE FROM matches WHERE id = {id} 
-    '''
+    """
     await notify_websockets({"type": "new_match"})
     return await err.safe_db_fetch_one(request=req, query=query)
 
-@app.delete(
-    "/season/id/{id}", 
-    tags=["Seasons", 
-    "Mutable"])
+
+@app.delete("/season/id/{id}", tags=["Seasons", "Mutable"])
 async def delete_season(req: Request, id: int) -> dict:
     if type(id) != int:
         return {"status": "FAIL", "data": {"message": "Invalid season ID"}}
-    query = f'''
+    query = f"""
         DELETE FROM seasons WHERE id = {id} 
-    '''
+    """
     await notify_websockets({"type": "new_match"})
     return await err.safe_db_fetch_one(request=req, query=query)
 
+
 # misc
+
 
 @app.get("/players-playing", tags=["Misc"])
 async def get_players_playing(req: Request):
     try:
-        res = requests.get("https://api.steampowered.com/ISteamUserStats/GetNumberOfCurrentPlayers/v1/?appid=2217000")
+        res = requests.get(
+            "https://api.steampowered.com/ISteamUserStats/GetNumberOfCurrentPlayers/v1/?appid=2217000"
+        )
         res.raise_for_status()
         if res.status_code == 200:
             data = res.json()
@@ -1421,7 +1588,9 @@ async def get_players_playing(req: Request):
         print(res.status_code)
         return await err.ErrorResponse(data=[])
 
+
 # websockets
+
 
 @app.get("/ws-test", tags=["WebSockets"])
 async def test_websocket_broadcast():
@@ -1431,18 +1600,23 @@ async def test_websocket_broadcast():
     message = {
         "type": "test_message",
         "content": "This is a test broadcast from the server.",
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat(),
     }
     await notify_websockets(message)
     return {"status": "success", "detail": "Test message broadcasted."}
+
 
 @app.get("/ws-count", tags=["WebSockets"])
 async def get_websocket_count(req: Request) -> dict:
     """
     Endpoint to get the count of connected WebSocket clients.
     """
-    
-    return {"count": len(websockets), "websockets": ", ".join([str(ws.client) for ws in websockets])}
+
+    return {
+        "count": len(websockets),
+        "websockets": ", ".join([str(ws.client) for ws in websockets]),
+    }
+
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -1455,12 +1629,13 @@ async def websocket_endpoint(websocket: WebSocket):
     try:
         while True:
             try:
-
-                message = await asyncio.wait_for(websocket.receive_text(), timeout=PING_SEC_INTERVAL)
+                message = await asyncio.wait_for(
+                    websocket.receive_text(), timeout=PING_SEC_INTERVAL
+                )
 
                 if message == "pong":
                     continue
-                
+
                 if message == "ping":
                     await websocket.send_text(f"pong @ {datetime.now()}")
                     continue
@@ -1475,7 +1650,9 @@ async def websocket_endpoint(websocket: WebSocket):
                 try:
                     await websocket.send_text("ping")
 
-                    await asyncio.wait_for(websocket.receive_text(), timeout=PONG_SEC_TIMEOUT)
+                    await asyncio.wait_for(
+                        websocket.receive_text(), timeout=PONG_SEC_TIMEOUT
+                    )
 
                 except asyncio.TimeoutError:
                     print(f"Client {websocket} did not respond to ping. Closing.")
@@ -1487,6 +1664,7 @@ async def websocket_endpoint(websocket: WebSocket):
         print(f"WebSocket error: {e}")
     finally:
         websockets.discard(websocket)
+
 
 async def notify_websockets(message: dict, exclude: WebSocket | None = None):
     """
@@ -1510,12 +1688,11 @@ async def notify_websockets(message: dict, exclude: WebSocket | None = None):
     print(f"Message broadcasted. {len(websockets)} active connections remaining.")
 
 
-
 async def get_latest_match_id(req: Request):
-    query = f'''
+    query = f"""
         SELECT 
             MAX(id) as latest_id
         FROM
             matches_vw
-    '''
+    """
     return await err.safe_db_fetch_one(request=req, query=query)
