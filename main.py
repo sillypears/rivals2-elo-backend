@@ -893,23 +893,57 @@ async def get_final_move_stats(req: Request) -> dict:
     """
     return await err.safe_db_fetch_all(request=req, query=query)
 
-
 @app.get("/all-seasons-stats", tags=["Charts"])
 async def get_all_seasons_stats(req: Request) -> dict:
     query = """
-        SELECT
-        season_display_name,
-        COUNT(*) AS total_matches,
-        SUM(CASE WHEN match_win = 1 THEN 1 ELSE 0 END) AS match_wins,
-        SUM(CASE WHEN match_win = 0 THEN 1 ELSE 0 END) AS match_losses,
-        MIN(elo_rank_new) as min_elo,
-        MAX(elo_rank_new) as max_elo,
-        MAX(elo_rank_new) - MIN(elo_rank_new) AS total_elo_change,
-        ROUND(AVG(match_win) * 100, 2) AS win_rate_percent
-        FROM matches_vw
-        GROUP BY season_display_name
-        ORDER BY season_id DESC;
-
+        WITH ordered AS (
+            SELECT 
+                season_id,
+                season_display_name,
+                match_date,
+                match_win,
+                ROW_NUMBER() OVER (PARTITION BY season_id ORDER BY match_date) as rn,
+                ROW_NUMBER() OVER (PARTITION BY season_id, match_win ORDER BY match_date) as rn_by_result
+            FROM matches_vw
+        ),
+        groups AS (
+            SELECT *,
+                rn - rn_by_result as grp
+            FROM ordered
+        ),
+        streaks AS (
+            SELECT 
+                season_id,
+                season_display_name,
+                match_win,
+                COUNT(*) as streak_length
+            FROM groups
+            GROUP BY season_id, grp, match_win, season_display_name
+        ),
+        max_streaks AS (
+            SELECT 
+                season_id,
+                MAX(CASE WHEN match_win = 1 THEN streak_length END) as highest_win_streak,
+                MAX(CASE WHEN match_win = 0 THEN streak_length END) as highest_loss_streak
+            FROM streaks
+            GROUP BY season_id
+        )
+        SELECT 
+            s.season_display_name,
+            s.season_id,
+            COUNT(*) AS total_matches,
+            CAST(SUM(CASE WHEN match_win = 1 THEN 1 ELSE 0 END) AS UNSIGNED) AS match_wins,
+            CAST(SUM(CASE WHEN match_win = 0 THEN 1 ELSE 0 END) AS UNSIGNED) AS match_losses,
+            MIN(s.elo_rank_new) as min_elo,
+            MAX(s.elo_rank_new) as max_elo,
+            MAX(s.elo_rank_new) - MIN(s.elo_rank_new) AS total_elo_change,
+            CAST(ROUND(AVG(s.match_win) * 100, 2) AS FLOAT) AS win_rate_percent,
+            m.highest_win_streak,
+            m.highest_loss_streak
+        FROM matches_vw s
+        JOIN max_streaks m ON s.season_id = m.season_id
+        GROUP BY s.season_display_name, s.season_id, m.highest_win_streak, m.highest_loss_streak
+        ORDER BY s.season_id DESC;
     """
     return await err.safe_db_fetch_all(request=req, query=query)
 
