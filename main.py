@@ -1494,7 +1494,7 @@ async def insert_match(match: Match, debug: bool = 0) -> dict:
                     }
                 )
                 print(
-                    """Sending: {"user": "backend", "type": "new_match", "ranked_game_number": %i }"""
+                    """Sending: {"user": "backend", "type": "new_match", "ranked_game_number": %i}"""
                     % (int(match.ranked_game_number))
                 )
                 if match.match_win == 1:
@@ -1503,6 +1503,7 @@ async def insert_match(match: Match, debug: bool = 0) -> dict:
                             "user": "backend",
                             "type": "new_win_stats",
                             "ranked_game_number": int(match.ranked_game_number),
+                            "opponent_name": match.opponent_name
                         }
                     )
                 elif match.match_win == 0:
@@ -1511,6 +1512,7 @@ async def insert_match(match: Match, debug: bool = 0) -> dict:
                             "user": "backend",
                             "type": "new_lose_stats",
                             "ranked_game_number": int(match.ranked_game_number),
+                            "opponent_name": match.opponent_name
                         }
                     )
                 inserted_id = cur.lastrowid
@@ -1519,6 +1521,11 @@ async def insert_match(match: Match, debug: bool = 0) -> dict:
                 print(f"Insert fail: {e}")
                 return err.ErrorResponse(message=f"{e}").model_dump()
     return err.SuccessResponse(data=match).model_dump()
+
+@app.post("/ui_user_lookup", tags=["Matches", "Meta"])
+async def ui_user_lookup(payload: dict, debug:bool=0) -> None:
+
+    await notify_websockets({"type": "ui_user_lookup", "opponent_name": payload["opponent_name"].strip()})
 
 
 # patch
