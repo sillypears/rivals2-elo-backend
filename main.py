@@ -935,6 +935,7 @@ async def get_all_seasons_stats(req: Request) -> dict:
             CAST(SUM(CASE WHEN match_win = 1 THEN 1 ELSE 0 END) AS UNSIGNED) AS match_wins,
             CAST(SUM(CASE WHEN match_win = 0 THEN 1 ELSE 0 END) AS UNSIGNED) AS match_losses,
             MIN(s.elo_rank_new) as min_elo,
+            CAST(AVG(s.elo_rank_new) AS UNSIGNED) as avg_elo,
             MAX(s.elo_rank_new) as max_elo,
             MAX(s.elo_rank_new) - MIN(s.elo_rank_new) AS total_elo_change,
             CAST(ROUND(AVG(s.match_win) * 100, 2) AS FLOAT) AS win_rate_percent,
