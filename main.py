@@ -138,6 +138,8 @@ app.add_middleware(
         "http://192.168.1.30:8007",
         "http://r2f.podme.local",
         "https://r2f.podme.local",
+        "https://r2fend.podme.local",
+        "https://r2bend.podme.local"
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -701,16 +703,17 @@ async def get_stage_stats(req: Request) -> dict:
             SUM(CASE WHEN game_winner = 1 THEN 1 ELSE 0 END) AS wins,
             SUM(CASE WHEN game_winner = 2 THEN 1 ELSE 0 END) AS losses,
             COUNT(*) AS total_games,
-            ROUND(SUM(CASE WHEN game_winner = 1 THEN 1 ELSE 0 END) / COUNT(*) * 100, 2) AS win_percentage
+            ROUND(SUM(CASE WHEN game_winner = 1 THEN 1 ELSE 0 END) / COUNT(*) * 100, 2) AS win_percentage,
+            season_id
         FROM (
-            SELECT game_1_stage_name AS stage_name, game_1_winner AS game_winner FROM rivals2.matches_vw
+            SELECT game_1_stage_name AS stage_name, game_1_winner AS game_winner, season_id FROM rivals2.matches_vw
             UNION ALL
-            SELECT game_2_stage_name, game_2_winner FROM rivals2.matches_vw
+            SELECT game_2_stage_name, game_2_winner, season_id FROM rivals2.matches_vw
             UNION ALL
-            SELECT game_3_stage_name, game_3_winner FROM rivals2.matches_vw
+            SELECT game_3_stage_name, game_3_winner, season_id FROM rivals2.matches_vw
         ) AS games
         WHERE stage_name NOT IN ('N/A', '') AND game_winner IN (1, 2)
-        GROUP BY stage_name
+        GROUP BY stage_name, season_id
         ORDER BY win_percentage DESC, total_games DESC;
             """
     return await err.safe_db_fetch_all(request=req, query=query)
