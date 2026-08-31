@@ -1570,23 +1570,97 @@ async def update_match(update_value: dict) -> dict:
     },
     tags=["Seasons", "Mutable"],
 )
-async def update_season(update_value: dict) -> dict:
+async def update_season(req: Request, id: int, update_value: dict) -> dict:
+    # Validate path id
     try:
-        season_id = int(update_value["row_id"])
-    except (ValueError, KeyError):
+        season_id = int(id)
+    except (ValueError, TypeError):
         return {"status": "failure", "message": "No ID provided or invalid ID format"}
-    if season_id:
-        print(
-            f"""UPDATE matches SET {update_value["key"]}="{update_value["value"]}" WHERE id = {season_id}"""
-        )
+    if not season_id:
+        return {"status": "failure", "message": "No ID provided or invalid ID format"}
+
+    # Allowed columns that map directly to `seasons` table
+    allowed_columns = {
+        "start_date",
+        "end_date",
+        "short_name",
+        "display_name",
+        "season_index",
+        "steam_leaderboard",
+    }
+
+    # Single-field mode: {key, value} or {field, value} or {column, value}
+    # Path id is source of truth; row_id in body is optional/legacy and ignored if mismatched
+    if "value" in update_value and any(k in update_value for k in ("key", "field", "column")):
+        if "row_id" in update_value:
+            try:
+                body_id = int(update_value["row_id"])
+                if body_id != season_id:
+                    print(f"update_season id mismatch path={season_id} body={body_id} - using path id")
+            except (ValueError, TypeError):
+                pass
+        key = update_value.get("key") or update_value.get("field") or update_value.get("column")
+        value = update_value["value"]
+        if key not in allowed_columns:
+            return {"status": "failure", "message": f"Invalid column: {key}"}
+        query = f"UPDATE seasons SET {key} = %s WHERE id = %s"
+        params = (value, season_id)
+        try:
+            async with app.state.db_pool.acquire() as conn:
+                async with conn.cursor(aiomysql.DictCursor) as cur:
+                    await cur.execute(query, params)
+                    if cur.rowcount == 0:
+                        return {"status": "failure", "message": f"Season {season_id} not found"}
+                    await cur.execute("SELECT id, start_date, end_date, short_name, display_name, season_index, steam_leaderboard FROM seasons WHERE id = %s", (season_id,))
+                    row = await cur.fetchone()
+            await notify_websockets({"type": "season_update", "season_id": season_id})
+            return err.SuccessResponse(data=row, message="Season updated").model_dump()
+        except Exception as e:
+            print(f"update_season single-field fail: {e}")
+            return err.ErrorResponse(message=str(e)).model_dump()
+
+    # Modern mode: dict of fields to update e.g. {display_name, short_name, start_date, ...}
+    # Also support body containing row_id that should be ignored / validated
+    if "row_id" in update_value:
+        # remove row_id from payload if someone sent it alongside full object
+        update_value = {k: v for k, v in update_value.items() if k != "row_id"}
+
+    # `latest` is computed, not stored - ignore it
+    update_value.pop("latest", None)
+    update_value.pop("id", None)
+
+    # Filter to allowed columns only
+    fields = {k: v for k, v in update_value.items() if k in allowed_columns}
+    if not fields:
+        return {"status": "failure", "message": "No valid fields to update"}
+
+    set_clauses = []
+    params = []
+    for col, val in fields.items():
+        set_clauses.append(f"{col} = %s")
+        # Normalize empty string to None for nullable ints
+        if col in ("season_index", "steam_leaderboard") and val == "":
+            val = None
+        params.append(val)
+
+    params.append(season_id)
+    set_sql = ", ".join(set_clauses)
+    query = f"UPDATE seasons SET {set_sql} WHERE id = %s"
+    try:
+        print(f"update_season query: {query} params={params}")
         async with app.state.db_pool.acquire() as conn:
             async with conn.cursor(aiomysql.DictCursor) as cur:
-                await cur.execute(
-                    f"""UPDATE matches SET {update_value["key"]}="{update_value["value"]}" WHERE id = {season_id}"""
-                )
-                rows = await cur.fetchall()
-                return err.SuccessResponse(data=rows, message="hi").model_dump()
-    return err.SuccessResponse(data={}).model_dump()
+                await cur.execute(query, tuple(params))
+                if cur.rowcount == 0:
+                    return {"status": "failure", "message": f"Season {season_id} not found"}
+                await cur.execute("SELECT id, start_date, end_date, short_name, display_name, season_index, steam_leaderboard FROM seasons WHERE id = %s", (season_id,))
+                row = await cur.fetchone()
+        await notify_websockets({"type": "season_update", "season_id": season_id})
+        return err.SuccessResponse(data=row, message="Season updated").model_dump()
+    except Exception as e:
+        print(f"update_season fail: {e}")
+        import traceback; traceback.print_exc()
+        return err.ErrorResponse(message=str(e)).model_dump()
 
 
 # delete
