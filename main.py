@@ -441,6 +441,163 @@ async def get_opponent_counts(req: Request):
         return err.ErrorResponse(message=f"Could not get opponent_list: {e}")
 
 
+@app.get("/opponents-per-season", tags=["Ranked", "Meta", "Charts"])
+@app.get("/opponents-per-season/{season_id}", tags=["Ranked", "Meta", "Charts"])
+@app.get("/opponent_count/by_season", tags=["Ranked", "Meta", "Charts"])
+@app.get("/opponent_count/by_season/{season_id}", tags=["Ranked", "Meta", "Charts"])
+@app.get("/opponent-count-by-season", tags=["Ranked", "Meta", "Charts"])
+@app.get("/opponent-count-by-season/{season_id}", tags=["Ranked", "Meta", "Charts"])
+async def get_opponents_per_season(
+    req: Request,
+    season_id: Optional[int] = None,
+) -> dict:
+    """
+    Counts total # of opponents per season, along with top 3 most faced opponents.
+    Returns per-season: total_unique_opponents, total_matches, season match_stats,
+    and top_3 [{opponent_name, count, wins, losses, win_percentage, match_stats}].
+    Each top_3 entry includes per-opponent match stats for that season.
+    If season_id is provided (path or query: ?season_id=1), returns single season entry.
+    """
+    try:
+        # Normalize season_id (covers path param and ?season_id= query param via FastAPI)
+        # FastAPI will inject path/query value into season_id arg; manual check for invalid
+        filter_season: Optional[int] = None
+        if season_id is not None:
+            try:
+                filter_season = int(season_id)
+                if filter_season < 1:
+                    raise ValueError
+            except (ValueError, TypeError):
+                return err.ErrorResponse(message="Invalid season_id", error_code="VALIDATION_ERROR").model_dump()
+
+        # Totals per season - include all seasons via LEFT JOIN so empty seasons appear with 0
+        # Includes season-wide match stats (wins/losses/win_rate) for context
+        if filter_season is not None:
+            totals_query = """
+                SELECT
+                    s.id AS season_id,
+                    s.display_name AS season_display_name,
+                    s.short_name AS season_short_name,
+                    s.season_index,
+                    COUNT(DISTINCT CASE WHEN m.opponent_name <> '' AND m.opponent_name IS NOT NULL THEN m.opponent_name END) AS total_unique_opponents,
+                    COUNT(m.id) AS total_matches,
+                    COALESCE(SUM(CASE WHEN m.match_win = 1 THEN 1 ELSE 0 END), 0) AS total_wins,
+                    COALESCE(SUM(CASE WHEN m.match_win = 0 THEN 1 ELSE 0 END), 0) AS total_losses,
+                    CASE WHEN COUNT(m.id) > 0 THEN ROUND(SUM(CASE WHEN m.match_win = 1 THEN 1 ELSE 0 END) / COUNT(m.id) * 100, 2) ELSE 0 END AS win_rate_percent
+                FROM seasons s
+                LEFT JOIN matches_vw m ON m.season_id = s.id AND m.opponent_name <> '' AND m.opponent_name IS NOT NULL
+                WHERE s.id = %s
+                GROUP BY s.id, s.display_name, s.short_name, s.season_index
+                ORDER BY s.id ASC
+            """
+            totals_result = await err.safe_db_fetch_all(request=req, query=totals_query, params=(filter_season,))
+        else:
+            totals_query = """
+                SELECT
+                    s.id AS season_id,
+                    s.display_name AS season_display_name,
+                    s.short_name AS season_short_name,
+                    s.season_index,
+                    COUNT(DISTINCT CASE WHEN m.opponent_name <> '' AND m.opponent_name IS NOT NULL THEN m.opponent_name END) AS total_unique_opponents,
+                    COUNT(m.id) AS total_matches,
+                    COALESCE(SUM(CASE WHEN m.match_win = 1 THEN 1 ELSE 0 END), 0) AS total_wins,
+                    COALESCE(SUM(CASE WHEN m.match_win = 0 THEN 1 ELSE 0 END), 0) AS total_losses,
+                    CASE WHEN COUNT(m.id) > 0 THEN ROUND(SUM(CASE WHEN m.match_win = 1 THEN 1 ELSE 0 END) / COUNT(m.id) * 100, 2) ELSE 0 END AS win_rate_percent
+                FROM seasons s
+                LEFT JOIN matches_vw m ON m.season_id = s.id AND m.opponent_name <> '' AND m.opponent_name IS NOT NULL
+                GROUP BY s.id, s.display_name, s.short_name, s.season_index
+                ORDER BY s.id ASC
+            """
+            totals_result = await err.safe_db_fetch_all(request=req, query=totals_query)
+
+        if totals_result["status"] != "SUCCESS":
+            return totals_result
+
+        # Handle season not found when filtering
+        if filter_season is not None and not totals_result["data"]:
+            return err.ErrorResponse(message="Season Not Found", error_code="404").model_dump()
+
+        # Top 3 opponents per season - aggregated counts with per-opponent match stats
+        # Includes wins/losses/win_percentage for each opponent within that season
+        if filter_season is not None:
+            top_query = """
+                SELECT
+                    season_id,
+                    opponent_name,
+                    COUNT(*) AS cnt,
+                    SUM(CASE WHEN match_win = 1 THEN 1 ELSE 0 END) AS wins,
+                    SUM(CASE WHEN match_win = 0 THEN 1 ELSE 0 END) AS losses,
+                    ROUND(SUM(CASE WHEN match_win = 1 THEN 1 ELSE 0 END) / COUNT(*) * 100, 2) AS win_percentage
+                FROM matches_vw
+                WHERE opponent_name <> '' AND opponent_name IS NOT NULL AND season_id = %s
+                GROUP BY season_id, opponent_name
+                ORDER BY cnt DESC, opponent_name ASC
+            """
+            top_result = await err.safe_db_fetch_all(request=req, query=top_query, params=(filter_season,))
+        else:
+            top_query = """
+                SELECT
+                    season_id,
+                    opponent_name,
+                    COUNT(*) AS cnt,
+                    SUM(CASE WHEN match_win = 1 THEN 1 ELSE 0 END) AS wins,
+                    SUM(CASE WHEN match_win = 0 THEN 1 ELSE 0 END) AS losses,
+                    ROUND(SUM(CASE WHEN match_win = 1 THEN 1 ELSE 0 END) / COUNT(*) * 100, 2) AS win_percentage
+                FROM matches_vw
+                WHERE opponent_name <> '' AND opponent_name IS NOT NULL AND season_id IS NOT NULL
+                GROUP BY season_id, opponent_name
+                ORDER BY season_id ASC, cnt DESC, opponent_name ASC
+            """
+            top_result = await err.safe_db_fetch_all(request=req, query=top_query)
+
+        top_rows = top_result["data"] if top_result["status"] == "SUCCESS" and top_result["data"] else []
+
+        # Build map season_id -> top 3 list (with match stats - no duplication)
+        from collections import defaultdict
+        top_map: Dict[int, List[Dict[str, Any]]] = defaultdict(list)
+        # Since rows are already ordered by season_id and cnt DESC, we can collect first 3 per season
+        for row in top_rows:
+            sid = row["season_id"]
+            if len(top_map[sid]) < 3:
+                top_map[sid].append({
+                    "opponent_name": row["opponent_name"],
+                    "count": int(row["cnt"]),
+                    "wins": int(row["wins"] or 0),
+                    "losses": int(row["losses"] or 0),
+                    "win_percentage": float(row["win_percentage"] or 0),
+                })
+
+        # Merge into totals - add season-wide match stats (deduplicated)
+        merged = []
+        for season in totals_result["data"]:
+            sid = season["season_id"]
+            # Ensure ints (MySQL may return Decimal) and floats
+            season["total_unique_opponents"] = int(season["total_unique_opponents"] or 0)
+            season["total_matches"] = int(season["total_matches"] or 0)
+            season["total_wins"] = int(season.get("total_wins") or 0)
+            season["total_losses"] = int(season.get("total_losses") or 0)
+            season["win_percentage"] = float(season.get("win_rate_percent") or season.get("win_percentage") or 0)
+            # remove legacy alias duplication - keep single win_percentage
+            season.pop("win_rate_percent", None)
+            season["match_stats"] = {
+                "total": season["total_matches"],
+                "wins": season["total_wins"],
+                "losses": season["total_losses"],
+                "win_percentage": season["win_percentage"],
+            }
+            season["top_3"] = top_map.get(sid, [])
+            # also provide alias total_opponents for convenience (kept, but same as total_unique)
+            season["total_opponents"] = season["total_unique_opponents"]
+            merged.append(season)
+
+        # If single season requested, return single object (but keep list wrapper for consistency)
+        # Caller can use data[0]; also support unwrapped via ? but we keep SuccessResponse list
+        return err.SuccessResponse(data=merged, total=len(merged)).model_dump()
+
+    except Exception as e:
+        return err.ErrorResponse(message=f"Could not get opponents-per-season: {e}").model_dump()
+
+
 @app.get("/current_tier", tags=["Performance"])
 async def get_current_tier(req: Request) -> dict:
     try:
