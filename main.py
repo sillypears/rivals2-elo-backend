@@ -35,6 +35,8 @@ from models.responses.seasons import (
 
 from models.responses.season import Season, SeasonResponse
 
+from models.responses.servers import Servers, ServersListResponse
+
 from models.responses.characters import (
     Character,
     CharactersListResponse,
@@ -75,6 +77,7 @@ ALLOWED_UPDATE_COLUMNS = {
     "game_3_winner",
     "game_3_final_move_id",
     "final_move_id",
+    "server_issue",
 }
 
 
@@ -326,6 +329,12 @@ async def get_characters(req: Request) -> dict:
     """
     return await err.safe_db_fetch_all(request=req, query=query)
 
+@app.get("/servers", tags=["Servers", "Meta"])
+async def get_servers(req: Request) -> dict:
+    query = """
+        SELECT * FROM servers
+    """
+    return await err.safe_db_fetch_all(request=req, query=query)
 
 @app.get("/seasons", tags=["Seasons", "Meta"], response_model=SeasonListResponse)
 async def get_seasons(req: Request) -> dict:
