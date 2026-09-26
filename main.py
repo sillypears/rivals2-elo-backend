@@ -9,7 +9,7 @@ from fastapi import (
     Query,
 )
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from contextlib import asynccontextmanager
 import aiomysql
 from dotenv import load_dotenv
@@ -1605,6 +1605,8 @@ async def insert_match(match: Match, debug: bool = 0) -> dict:
         )
     """
     inserted_id = -1
+    # Log payload for debugging parser vs frontend differences
+    print(f"insert-match payload: match_date={match.match_date} ranked_game_number={match.ranked_game_number} opponent={match.opponent_name} debug={debug}")
     async with app.state.db_pool.acquire() as conn:
         async with conn.cursor() as cur:
             try:
@@ -1645,7 +1647,34 @@ async def insert_match(match: Match, debug: bool = 0) -> dict:
                     ),
                 )
             except Exception as e:
-                return err.ErrorResponse(message=f"{e}").model_dump()
+                import traceback as _tb
+                print(f"insert-match DB error: {e}")
+                _tb.print_exc()
+                msg = str(e)
+                # Map known DB errors to proper HTTP status
+                if "No matching season" in msg:
+                    http_status = status.HTTP_400_BAD_REQUEST
+                    error_code = "NO_SEASON_FOR_DATE"
+                elif "Duplicate entry" in msg and "unique_game_per_season" in msg:
+                    http_status = status.HTTP_409_CONFLICT
+                    error_code = "DUPLICATE_GAME_NUMBER"
+                elif "Duplicate entry" in msg:
+                    http_status = status.HTTP_409_CONFLICT
+                    error_code = "DUPLICATE_ENTRY"
+                elif "foreign key" in msg.lower() or "constraint" in msg.lower():
+                    http_status = status.HTTP_400_BAD_REQUEST
+                    error_code = "FOREIGN_KEY_VIOLATION"
+                else:
+                    http_status = status.HTTP_500_INTERNAL_SERVER_ERROR
+                    error_code = "DATABASE_ERROR"
+                return JSONResponse(
+                    status_code=http_status,
+                    content=err.ErrorResponse(
+                        message=msg,
+                        error_code=error_code,
+                        details={"ranked_game_number": match.ranked_game_number, "match_date": str(match.match_date)},
+                    ).model_dump(),
+                )
             try:
                 await notify_websockets(
                     message={
@@ -1679,8 +1708,13 @@ async def insert_match(match: Match, debug: bool = 0) -> dict:
                 inserted_id = cur.lastrowid
                 match.match_id = inserted_id
             except Exception as e:
-                print(f"Insert fail: {e}")
-                return err.ErrorResponse(message=f"{e}").model_dump()
+                import traceback as _tb
+                print(f"Insert notify fail: {e}")
+                _tb.print_exc()
+                return JSONResponse(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    content=err.ErrorResponse(message=f"{e}", error_code="WEBSOCKET_ERROR").model_dump(),
+                )
     return err.SuccessResponse(data=match).model_dump()
 
 @app.post("/ui_user_lookup", tags=["Matches", "Meta"])
