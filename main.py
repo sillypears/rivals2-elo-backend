@@ -77,6 +77,7 @@ ALLOWED_UPDATE_COLUMNS = {
     "game_3_winner",
     "game_3_final_move_id",
     "final_move_id",
+    "server_id",
     "server_issue",
 }
 
@@ -329,7 +330,7 @@ async def get_characters(req: Request) -> dict:
     """
     return await err.safe_db_fetch_all(request=req, query=query)
 
-@app.get("/servers", tags=["Servers", "Meta"])
+@app.get("/servers", tags=["Servers", "Meta"], response_model=ServersListResponse)
 async def get_servers(req: Request) -> dict:
     query = """
         SELECT * FROM servers
@@ -1603,14 +1604,14 @@ async def insert_match(match: Match, debug: bool = 0) -> dict:
             game_1_char_pick, game_1_opponent_pick, game_1_stage, game_1_winner, game_1_final_move_id, game_1_duration,
             game_2_char_pick, game_2_opponent_pick, game_2_stage, game_2_winner, game_2_final_move_id, game_2_duration,
             game_3_char_pick, game_3_opponent_pick, game_3_stage, game_3_winner, game_3_final_move_id, game_3_duration, 
-            final_move_id
+            final_move_id, server_id, server_issue
         ) VALUES (
             %s, %s, %s, %s, %s, %s, 
             %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, 
             %s, %s, %s, %s, %s, %s, 
-            %s
+            %s, %s, %s
         )
     """
     inserted_id = -1
@@ -1653,6 +1654,8 @@ async def insert_match(match: Match, debug: bool = 0) -> dict:
                         match.game_3_final_move_id,
                         match.game_3_duration,
                         match.final_move_id,
+                        match.server_id,
+                        match.server_issue
                     ),
                 )
             except Exception as e:

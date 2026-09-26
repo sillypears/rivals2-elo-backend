@@ -39,5 +39,7 @@ class Match:
     game_3_final_move_id: Optional[int] = -1
     game_3_duration: Optional[int] = -1 
     season_id: Optional[int] = -1
+    server_id: Optional[int] = -1
+    server_issue: Optional[bool] = 0
     final_move_id: Optional[int] = -1
     notes: Optional[str] = ""

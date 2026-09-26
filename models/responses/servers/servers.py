@@ -7,6 +7,7 @@ class Servers(BaseModel):
     id: int
     short_name: str
     display_name: str
+    country: str
     model_config = {"from_attributes": True}  
 
 
