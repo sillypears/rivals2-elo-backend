@@ -41,5 +41,7 @@ class Match:
     season_id: Optional[int] = -1
     server_id: Optional[int] = -1
     server_issue: Optional[bool] = 0
+    server_ip: Optional[str] = "0.0.0.0"
+    server_port: Optional[int] = -1
     final_move_id: Optional[int] = -1
     notes: Optional[str] = ""

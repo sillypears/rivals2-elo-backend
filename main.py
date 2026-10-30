@@ -48,6 +48,7 @@ from models.responses.moves import Move, MovesListResponse, SingleMoveResponse
 from models.responses.meta import BestWins, BestWinsListResponse
 
 load_dotenv()
+
 ALLOWED_UPDATE_COLUMNS = {
     "match_date",
     "elo_rank_old",
@@ -246,6 +247,31 @@ async def health_check(req: Request) -> dict:
         "details": {"database": db_status},
     }
 
+
+@app.get(
+    "/playfab-health",
+    summary="Playfab Server Health",
+    description="Gets the playfab statuspage information",
+    status_code=status.HTTP_200_OK,
+    tags=["Health"]
+)
+async def get_playfab_healthstatus(req:Request) -> dict:
+    PLAYFAB_STATUS_URL = os.environ.get("PLAYFAB_STATUS_URL")
+    health_flag = True
+
+    res = requests.get(f"https://{PLAYFAB_STATUS_URL}/api/v2/summary.json")
+    res.raise_for_status()
+    res_json = res.json()
+
+    for comp in res_json['components']:
+        if comp['status'] != "operational": health_flag = False
+
+    return {
+        "timestamp": datetime.now().isoformat(),
+        "health": "OK" if health_flag else "FAIL",
+        "link": PLAYFAB_STATUS_URL,
+        "message": res_json['status']
+    }
 
 @app.get(
     "/characters",
@@ -1604,14 +1630,14 @@ async def insert_match(match: Match, debug: bool = 0) -> dict:
             game_1_char_pick, game_1_opponent_pick, game_1_stage, game_1_winner, game_1_final_move_id, game_1_duration,
             game_2_char_pick, game_2_opponent_pick, game_2_stage, game_2_winner, game_2_final_move_id, game_2_duration,
             game_3_char_pick, game_3_opponent_pick, game_3_stage, game_3_winner, game_3_final_move_id, game_3_duration, 
-            final_move_id, server_id, server_issue
+            final_move_id, server_id, server_issue, server_ip, server_port
         ) VALUES (
             %s, %s, %s, %s, %s, %s, 
             %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, 
             %s, %s, %s, %s, %s, %s, 
-            %s, %s, %s
+            %s, %s, %s, %s, %s
         )
     """
     inserted_id = -1
@@ -1655,7 +1681,9 @@ async def insert_match(match: Match, debug: bool = 0) -> dict:
                         match.game_3_duration,
                         match.final_move_id,
                         match.server_id,
-                        match.server_issue
+                        match.server_issue,
+                        match.server_ip,
+                        match.server_port
                     ),
                 )
             except Exception as e:
