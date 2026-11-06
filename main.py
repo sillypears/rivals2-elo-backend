@@ -1619,8 +1619,8 @@ async def get_game_duration_by_opponent(req: Request) -> dict:
     """
     return await err.safe_db_fetch_all(request=req, query=query)
 
-@app.get("/server-info", tags=["Servers"])
-async def get_server_info(req: Request, extended:bool=False) -> dict:
+@app.get("/gameserver-info", tags=["Servers"])
+async def get_gameserver_info(req: Request, extended:bool=False) -> dict:
     query = """
         SELECT 
             id, 
