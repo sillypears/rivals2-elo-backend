@@ -48,7 +48,7 @@ from models.responses.moves import Move, MovesListResponse, SingleMoveResponse
 from models.responses.meta import BestWins, BestWinsListResponse
 
 load_dotenv()
-
+IPINFO_TOKEN = os.getenv('IPINFO_TOKEN', 0)
 ALLOWED_UPDATE_COLUMNS = {
     "match_date",
     "elo_rank_old",
@@ -1619,6 +1619,31 @@ async def get_game_duration_by_opponent(req: Request) -> dict:
     """
     return await err.safe_db_fetch_all(request=req, query=query)
 
+@app.get("/server-info", tags=["Servers"])
+async def get_server_info(req: Request, extended:bool=False) -> dict:
+    query = """
+        SELECT 
+            id, 
+            ranked_game_number, 
+            match_date, 
+            server_display_name, 
+            server_ip, 
+            server_port, 
+            server_issue
+        FROM rivals2.matches_vw 
+        WHERE server_ip <> "0.0.0.0"
+    """
+    raw_data = await err.safe_db_fetch_all(request=req, query=query)
+    if extended:
+        for i,d in enumerate(raw_data['data']):
+            try:
+                res = requests.get(f"https://api.ipinfo.io/lite/{d['server_ip']}?token={IPINFO_TOKEN}")
+                res.raise_for_status()
+                d_json = res.json()
+                raw_data['data'][i]['meta'] = d_json
+            except Exception as e:
+                print(f"NO TOKEN: {e}")
+    return raw_data
 
 # post
 @app.post("/insert-match", tags=["Matches", "Mutable"])
